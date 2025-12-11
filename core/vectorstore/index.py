@@ -1,0 +1,51 @@
+import faiss
+import numpy as np
+import pickle 
+from typing import List
+
+class VectorIndex:
+    """
+    Indexador vetorial usando FAISS
+    Guarda:
+    - o índice FAISS
+    - lista de chunks associados a cada vetor
+    """
+
+    def __init__(self, dim: int = 768):
+        self.index = faiss.IndexFlatL2(dim)
+        self.chunks: List[str] = []
+
+    def add(self, embeddings, chunks: list[str]):
+        """
+        Adiciona embeddings e chunks ao índice
+        embeddings: matriz numpy de vetores
+        chunks: lista de strings correspondentes
+        """
+        embeddings = np.array(embeddings).astype('float32')
+        self.index.add(embeddings)
+        self.chunks.extend(chunks)
+    
+    def search(self, query_embedding, top_k: int = 5) -> List[str]:
+        """
+        Busca top_k chunks mais proximos do embedding de consulta
+        """"
+
+        query_embedding = np.array([query_embedding]).astype('float32')
+        distances, ids = self.index.search(query_embedding, top_k)
+        return [self.chunks[i] for i in ids[0] if i < len(self.chunks)]
+
+    def save(self, index_path : str, chunks_path : str):
+        """
+        Salva o índice FAISS e os chunks em arquivos separados
+        """
+        faiss.write_index(self.index, index_path)
+        with open(chunks_path, 'wb') as f:
+            pickle.dump(self.chunks, f)
+
+    def load(self, index_path : str, chunks_path : str):
+        """
+        Carrega indice FAISS + chunks de disco
+        """
+        self.index = faiss.read_index(index_path)
+        with open(chunks_path, 'rb') as f:
+            self.chunks = pickle.load(f)
