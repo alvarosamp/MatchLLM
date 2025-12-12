@@ -5,6 +5,7 @@ services:
     build:
       context: ..
       dockerfile: docker/fastapi.Dockerfile
+    container_name: licitacao_api
     ports:
       - "8000:8000"
     volumes:
@@ -12,11 +13,14 @@ services:
     depends_on:
       - postgres
       - ollama
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/licitacoes
 
   dashboard:
     build:
       context: ..
       dockerfile: docker/streamlit.Dockerfile
+    container_name: licitacao_dashboard
     ports:
       - "8501:8501"
     volumes:
@@ -26,6 +30,8 @@ services:
 
   postgres:
     image: postgres:15
+    container_name: licitacao_postgres
+    restart: always
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin
@@ -34,9 +40,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../db/schemas.sql:/docker-entrypoint-initdb.d/schemas.sql
 
   ollama:
     image: ollama/ollama
+    container_name: licitacao_ollama
     ports:
       - "11434:11434"
     volumes:
