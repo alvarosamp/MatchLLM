@@ -1,5 +1,5 @@
 import os
-from core.ocr.extrator import PDFExtrator
+from core.ocr.extractor import PDFExtractor
 from core.ocr.normalizador import normalize_text
 from core.preprocess.chunker import chunk_text
 from core.preprocess.embeddings import Embedder
@@ -19,7 +19,7 @@ def process_edital(pdf_path:str, edital_id: int) -> dict:
         -> Armazena os embeddings no indice vetorial
     """
     os.makedirs(BASE_VECTOR_DIR, exist_ok=True)
-    extractor = PDFExtrator()
+    extractor = PDFExtractor()
     raw_text = extractor.extract(pdf_path)
     normalized_text = normalize_text(raw_text)
     chunks = chunk_text(normalized_text)
