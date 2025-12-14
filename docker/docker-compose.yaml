@@ -13,8 +13,6 @@ services:
     depends_on:
       - postgres
       - ollama
-    env_file:
-      - ../.env             # Agora lê variáveis do arquivo .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
 
@@ -31,8 +29,6 @@ services:
       - ..:/app
     depends_on:
       - api
-    env_file:
-      - ../.env
 
   postgres:
     image: postgres:15

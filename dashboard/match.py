@@ -1,8 +1,11 @@
+import os
 import streamlit as st
 import requests
 import json
 
-API_URL = "http://localhost:8000"
+# Dentro do Docker, o hostname do serviço da API é "api"
+# Permite override via variável de ambiente
+API_URL = os.getenv("API_BASE_URL", "http://api:8000")
 
 
 st.title("Match Produto x Edital")
@@ -29,7 +32,7 @@ if st.button("Rodar Match"):
             "atributos": atributos,
         }
         resp = requests.post(
-            f"{API_URL}/edital/match/{edital_id}",
+            f"{API_URL}/editais/match/{edital_id}",
             params={"consulta": consulta},
             json=payload,
         )

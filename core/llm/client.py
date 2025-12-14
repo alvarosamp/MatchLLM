@@ -11,9 +11,12 @@ class LLMClient:
     - receber resposta textual do modelo
     """
 
-    def __init__(self):
-        self.base_url = os.getenv("LLM_URL", "http://localhost:11434")
-        self.model = os.getenv("LLM_MODEL", "llama3.1")
+    def __init__(self, model: str | None = None, base_url: str | None = None):
+        # Permite sobrescrever via parâmetro; caso contrário usa env vars com defaults
+        self.base_url = base_url or os.getenv("LLM_URL", "http://localhost:11434")
+        # Default alterado para um modelo menor por padrão (reduz RAM exigida)
+        # Ajuste via env: export LLM_MODEL="mistral:7b-instruct-q4_0" ou "llama3:latest"
+        self.model = model or os.getenv("LLM_MODEL", "llama2")
 
     def generate(self, prompt: str) -> str:
         payload = {
@@ -36,10 +39,34 @@ class LLMClient:
                 f"Não foi possível conectar ao LLM em {self.base_url}. Verifique se o Ollama está em execução."
             ) from ce
         except requests.exceptions.HTTPError as he:
+            # Se o modelo não for encontrado (404), tenta fallback para um modelo disponível
+            status = getattr(he.response, "status_code", None) if hasattr(he, "response") else None
+            body = he.response.text if hasattr(he, "response") and he.response is not None else ""
+            if status == 404 and "model" in body and "not found" in body.lower():
+                available = self.list_models()
+                if available:
+                    # escolhe o primeiro disponível
+                    fallback = available[0]
+                    try:
+                        response2 = requests.post(
+                            f"{self.base_url}/api/generate",
+                            json={"model": fallback, "prompt": prompt, "stream": False},
+                            timeout=120,
+                        )
+                        response2.raise_for_status()
+                        data2 = response2.json()
+                        return data2.get("response", "")
+                    except Exception as e2:
+                        raise RuntimeError(
+                            f"Modelo padrão '{self.model}' indisponível e fallback '{fallback}' falhou: {e2}"
+                        ) from e2
+                raise RuntimeError(
+                    f"Modelo '{self.model}' não encontrado e nenhum modelo disponível no Ollama."
+                )
             # Inclui parte do corpo para facilitar diagnóstico
-            snippet = response.text[:500] if response is not None else ""
+            snippet = body[:500]
             raise RuntimeError(
-                f"Erro HTTP do LLM ({response.status_code}): {snippet}"
+                f"Erro HTTP do LLM ({status}): {snippet}"
             ) from he
         except requests.exceptions.Timeout as te:
             raise RuntimeError("Tempo de espera excedido ao gerar resposta do LLM.") from te

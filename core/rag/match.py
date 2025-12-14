@@ -5,8 +5,9 @@ class Matcher:
     """
     Junta produto + trechos relevantes do edital
     """
-    def __init__(self,llm_client: LLMClient | None = None):
-        self.llm_client = llm_client or LLMClient()
+    def __init__(self, llm_client: LLMClient | None = None, model: str | None = None):
+        # Se um cliente não for fornecido, cria um com possível override de modelo
+        self.llm_client = llm_client or LLMClient(model=model)
 
     def compare(self, produto_json: dict, edital_chunks: list[str]) -> str:
         """

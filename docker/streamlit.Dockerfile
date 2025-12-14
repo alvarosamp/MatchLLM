@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
-CMD ["streamlit", "run", "dashboard/Home.py", "--server.address=0.0.0.0", "--server.port=8501"]
+CMD ["streamlit", "run", "dashboard/home.py", "--server.address=0.0.0.0", "--server.port=8501"]

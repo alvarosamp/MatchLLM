@@ -29,5 +29,5 @@ def processar_edital(file) -> dict:
     return result
 
 
-def rodar_match(produto: Produto, edital_id: int, consulta: str) -> str:
-    return match_produto_edital(produto.dict(), edital_id, consulta)
+def rodar_match(produto: Produto, edital_id: int, consulta: str, model: str | None = None) -> str:
+    return match_produto_edital(produto.dict(), edital_id, consulta, model=model)
