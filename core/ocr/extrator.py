@@ -1,6 +1,13 @@
 import pdfplumber
-from doctr.io import DocumentFile
-from doctr.models import ocr_predictor
+
+# Tenta importar Doctr; se não disponível, usa fallback com PyMuPDF (fitz)
+try:
+    from doctr.io import DocumentFile
+    from doctr.models import ocr_predictor
+    _HAS_DOCTR = True
+except Exception:
+    _HAS_DOCTR = False
+    import fitz  # PyMuPDF
 
 class PDFExtrator:
     """
@@ -10,8 +17,11 @@ class PDFExtrator:
     """
 
     def __init__(self):
-        #Carrega o modelo do ocr da doctr
-        self.ocr_model = ocr_predictor(pretrained = True)
+        # Carrega o modelo do OCR da Doctr se disponível; caso contrário, usa fallback
+        if _HAS_DOCTR:
+            self.ocr_model = ocr_predictor(pretrained=True)
+        else:
+            self.ocr_model = None
 
     def extract_text_native(self, pdf_path: str) -> str | None:
         """
@@ -32,12 +42,24 @@ class PDFExtrator:
         
     def extract_text_ocr(self, pdf_path: str) -> str:
         """
-        Extrai o texto de pdf escaneados usando ocr
-        Retorna o texto extraido
+        Extrai o texto de PDFs escaneados usando OCR.
+        Preferencialmente usa Doctr; se indisponível, faz fallback simples
+        renderizando texto por PyMuPDF (pode ter menor acurácia em PDFs imagem).
         """
-        doc = DocumentFile.from_pdf(pdf_path)
-        result = self.ocr_model(doc)
-        return result.render()
+        if _HAS_DOCTR and self.ocr_model is not None:
+            doc = DocumentFile.from_pdf(pdf_path)
+            result = self.ocr_model(doc)
+            return result.render()
+        # Fallback: tentar extrair texto com PyMuPDF (fitz)
+        try:
+            texto = []
+            with fitz.open(pdf_path) as pdf:
+                for page in pdf:
+                    texto.append(page.get_text())
+            return "\n".join(t for t in texto if t)
+        except Exception as e:
+            print(f"Erro no fallback de OCR (PyMuPDF): {e}")
+            return ""
     
     def extract(self, pdf_path: str) -> str:
         """

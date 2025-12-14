@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build:
@@ -7,14 +5,16 @@ services:
       dockerfile: docker/fastapi.Dockerfile
     container_name: licitacao_api
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - ../.env
     volumes:
       - ..:/app
     depends_on:
       - postgres
       - ollama
     environment:
-      DATABASE_URL: postgresql://admin:admin@postgres:5432/licitacoes
+      DATABASE_URL: ${DATABASE_URL}
 
   dashboard:
     build:
@@ -22,7 +22,9 @@ services:
       dockerfile: docker/streamlit.Dockerfile
     container_name: licitacao_dashboard
     ports:
-      - "8501:8501"
+      - "${DASHBOARD_PORT:-8501}:8501"
+    env_file:
+      - ../.env
     volumes:
       - ..:/app
     depends_on:

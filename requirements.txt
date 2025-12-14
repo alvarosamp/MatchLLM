@@ -1,0 +1,14 @@
+# Dependências mínimas iniciais — ajuste/pine conforme necessário
+fastapi
+uvicorn[standard]
+sqlalchemy
+asyncpg
+psycopg2-binary
+python-dotenv
+requests
+streamlit
+pdfplumber
+pymupdf
+sentence-transformers
+opencv-python-headless
+# Adicione outras dependências do projeto (transformers, sentence-transformers, faiss, etc.) conforme necessário
