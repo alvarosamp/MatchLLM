@@ -28,7 +28,7 @@ class VectorIndex:
     def search(self, query_embedding, top_k: int = 5) -> List[str]:
         """
         Busca top_k chunks mais proximos do embedding de consulta
-        """"
+        """
 
         query_embedding = np.array([query_embedding]).astype('float32')
         distances, ids = self.index.search(query_embedding, top_k)

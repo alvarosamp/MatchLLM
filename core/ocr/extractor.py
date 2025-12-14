@@ -1,6 +1,6 @@
 import pdfplumber
 
-class PDFExtrator:
+class PDFExtractor:
     """
     Extrai o texto de um pdf
     1 -> Tenta ler o arquivo nativo (PDF DIGGERIDO)
