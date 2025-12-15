@@ -1,5 +1,6 @@
 import requests
 import os
+from urllib.parse import urlparse, urlunparse
 
 
 class LLMClient:
@@ -16,27 +17,77 @@ class LLMClient:
         self.base_url = base_url or os.getenv("LLM_URL", "http://localhost:11434")
         # Default alterado para um modelo menor por padrão (reduz RAM exigida)
         # Ajuste via env: export LLM_MODEL="mistral:7b-instruct-q4_0" ou "llama3:latest"
-        self.model = model or os.getenv("LLM_MODEL", "llama2")
+        # Usa modelo menor por padrão para reduzir risco de OOM
+        self.model = model or os.getenv("LLM_MODEL", "llama3.2:1b")
+
+    def _try_generate(self, base_url: str, payload: dict) -> str:
+        response = requests.post(
+            f"{base_url}/api/generate",
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("response", "")
 
     def generate(self, prompt: str) -> str:
+        # Allow overriding Ollama generation options via env var LLM_OPTIONS (JSON)
+        options_env = os.getenv("LLM_OPTIONS", "")
+        options = None
+        if options_env:
+            try:
+                import json as _json
+                options = _json.loads(options_env)
+            except Exception:
+                options = None
+        # Default to deterministic, JSON-friendly generation
+        if options is None:
+            options = {
+                "temperature": 0,
+                "top_p": 1,
+                # menor contexto por padrão para reduzir uso de memória/V RAM
+                "num_ctx": 2048,
+            }
+
+        # JSON enforcement (optional): when enabled, Ollama will enforce JSON output
+        force_json = str(os.getenv("LLM_FORCE_JSON", "0")).lower() in ("1", "true", "yes")
+
         payload = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "options": options,
         }
+        if force_json:
+            payload["format"] = "json"
 
         try:
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=120,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("response", "")
+            # Tentativa primária
+            return self._try_generate(self.base_url, payload)
         except requests.exceptions.ConnectionError as ce:
+            # Fallback automático: tenta localhost/127.0.0.1/ollama
+            fallbacks = []
+            # 1) localhost
+            fallbacks.append("http://localhost:11434")
+            # 2) 127.0.0.1
+            fallbacks.append("http://127.0.0.1:11434")
+            # 3) nome de serviço docker (se não for o atual)
+            fallbacks.append("http://ollama:11434")
+
+            tried = [self.base_url]
+            for fb in fallbacks:
+                if fb in tried:
+                    continue
+                try:
+                    result = self._try_generate(fb, payload)
+                    # Atualiza base_url para as próximas chamadas
+                    self.base_url = fb
+                    return result
+                except requests.exceptions.RequestException:
+                    tried.append(fb)
+
             raise RuntimeError(
-                f"Não foi possível conectar ao LLM em {self.base_url}. Verifique se o Ollama está em execução."
+                f"Não foi possível conectar ao LLM. Tentativas: {', '.join(tried)}. Verifique se o Ollama está em execução."
             ) from ce
         except requests.exceptions.HTTPError as he:
             # Se o modelo não for encontrado (404), tenta fallback para um modelo disponível
@@ -63,6 +114,29 @@ class LLMClient:
                 raise RuntimeError(
                     f"Modelo '{self.model}' não encontrado e nenhum modelo disponível no Ollama."
                 )
+            # Falha por falta de memória GPU: tenta automaticamente um modelo menor (ex.: 1b)
+            if status == 500 and ("unable to allocate" in body.lower() or "cuda" in body.lower()):
+                available = self.list_models()
+                if available:
+                    # Heurística simples: preferir nomes contendo '1b'
+                    fallback = None
+                    for name in available:
+                        if "1b" in (name or "").lower():
+                            fallback = name
+                            break
+                    if not fallback:
+                        fallback = available[0]
+                    try:
+                        payload2 = dict(payload)
+                        payload2["model"] = fallback
+                        data2 = self._try_generate(self.base_url, payload2)
+                        # Atualiza o modelo padrao do cliente para próximas chamadas
+                        self.model = fallback
+                        return data2
+                    except Exception as e2:
+                        raise RuntimeError(
+                            f"Modelo configurado '{self.model}' causou OOM; fallback '{fallback}' também falhou: {e2}"
+                        ) from e2
             # Inclui parte do corpo para facilitar diagnóstico
             snippet = body[:500]
             raise RuntimeError(

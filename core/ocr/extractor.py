@@ -1,4 +1,6 @@
 import pdfplumber
+import os
+import time
 
 class PDFExtractor:
     """
@@ -48,6 +50,50 @@ class PDFExtractor:
         result = self.ocr_model(doc)
         return result.render()
     
+    def extract_text_gemini(self, pdf_path: str) -> str:
+        """
+        Extrai texto usando o Gemini (Google Generative AI) via Files API.
+        Requer a variável de ambiente GEMINI_API_KEY (ou GOOGLE_API_KEY).
+        """
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY/GOOGLE_API_KEY não definida para OCR com Gemini.")
+        try:
+            import google.generativeai as genai
+        except ImportError as e:
+            raise RuntimeError("Pacote 'google-generativeai' não instalado. Adicione ao requirements.txt e instale.") from e
+
+        genai.configure(api_key=api_key)
+        model_name = os.getenv("GEMINI_OCR_MODEL", "gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name)
+
+        uploaded = genai.upload_file(pdf_path)
+        # Aguarda processamento do arquivo
+        try:
+            while getattr(uploaded, "state", None) and getattr(uploaded.state, "name", "") == "PROCESSING":
+                time.sleep(1)
+                uploaded = genai.get_file(uploaded.name)
+        except Exception:
+            pass
+
+        state_name = getattr(getattr(uploaded, "state", None), "name", "ACTIVE")
+        if state_name != "ACTIVE":
+            raise RuntimeError(f"Falha no upload do PDF para Gemini (estado={state_name}).")
+
+        prompt = (
+            "Extraia TODO o texto legível deste PDF em ordem, sem comentários, "
+            "sem explicações e sem adicionar conteúdo. Retorne apenas o texto."
+        )
+        resp = model.generate_content([prompt, uploaded])
+        text = getattr(resp, "text", None)
+        if not text:
+            # Tenta acessar candidates
+            try:
+                text = resp.candidates[0].content.parts[0].text
+            except Exception:
+                text = ""
+        return text or ""
+
     def extract(self, pdf_path: str) -> str:
         """
         Extrai o texto de um pdf, tentando primeiro o metodo nativo

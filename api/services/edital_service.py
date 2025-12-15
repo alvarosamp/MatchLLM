@@ -1,7 +1,7 @@
 import shutil 
 import secrets
 from pathlib import Path
-from core.pipeline import process_edital, match_produto_edital
+from core.pipeline import process_edital, match_produto_edital, extract_requisitos_edital, match_produto_com_requisitos
 from api.models.edital import Produto
 
 DATA_EDITAIS_DIR = Path("data/editais")
@@ -31,3 +31,9 @@ def processar_edital(file) -> dict:
 
 def rodar_match(produto: Produto, edital_id: int, consulta: str, model: str | None = None) -> str:
     return match_produto_edital(produto.dict(), edital_id, consulta, model=model)
+
+def extrair_requisitos(edital_id: int, model: str | None = None) -> dict:
+    return extract_requisitos_edital(edital_id, model=model)
+
+def rodar_match_com_requisitos(produto: Produto, edital_id: int, model: str | None = None) -> list[dict]:
+    return match_produto_com_requisitos(produto.dict(), edital_id, model=model)

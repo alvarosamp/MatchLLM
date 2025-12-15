@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
+import json
 from typing import List
 from pathlib import Path
 from api.models.edital import Produto
-from api.services.edital_service import processar_edital, rodar_match
+from api.services.edital_service import processar_edital, rodar_match, extrair_requisitos, rodar_match_com_requisitos
 
 router = APIRouter(prefix="/editais", tags=["Editais"])
 
@@ -31,14 +32,42 @@ async def match_edital(
     produto: Produto,
     consulta: str,
     model: str | None = None,
+    use_requisitos: bool = False,
 ):
     """
     produto: JSON com informações técnicas
     consulta: string usada para buscar trechos relevantes (ex: "switch 24 portas poe")
     """
     try:
-        result = rodar_match(produto, edital_id, consulta, model=model)
-        return {"edital_id": edital_id, "resultado_llm": result}
+        if use_requisitos:
+            # Tenta usar requisitos previamente extraídos; se não houver, tenta extrair primeiro
+            try:
+                itens = rodar_match_com_requisitos(produto, edital_id, model=model)
+                return {"edital_id": edital_id, "resultado": itens}
+            except FileNotFoundError:
+                _ = extrair_requisitos(edital_id, model=model)
+                itens = rodar_match_com_requisitos(produto, edital_id, model=model)
+                return {"edital_id": edital_id, "resultado": itens}
+        else:
+            result = rodar_match(produto, edital_id, consulta, model=model)
+            # Tenta normalizar o resultado como JSON estruturado
+            result_json = None
+            if isinstance(result, (dict, list)):
+                result_json = result
+            elif isinstance(result, str):
+                try:
+                    result_json = json.loads(result)
+                except Exception:
+                    # tenta extrair array/objeto de dentro da string
+                    start = result.find('[')
+                    end = result.rfind(']')
+                    if start != -1 and end != -1 and end > start:
+                        snippet = result[start:end+1]
+                        try:
+                            result_json = json.loads(snippet)
+                        except Exception:
+                            result_json = None
+            return {"edital_id": edital_id, "resultado_llm": result, "resultado": result_json}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Índice do edital não encontrado. Reprocesse o edital.")
     except HTTPException:
@@ -59,3 +88,16 @@ async def listar_editais_indexados() -> List[int]:
             except Exception:
                 continue
     return sorted(ids)
+
+@router.post("/requisitos/{edital_id}")
+async def gerar_requisitos(edital_id: int, model: str | None = None, max_chunks: int = 20):
+    """Extrai itens/requisitos do edital já indexado e salva em JSON."""
+    try:
+        # Passa max_chunks para controlar o tamanho do contexto enviado ao LLM
+        from core.pipeline import extract_requisitos_edital
+        info = extract_requisitos_edital(edital_id, model=model, max_chunks=max_chunks)
+        return info
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Índice do edital não encontrado. Reprocesse o edital.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao extrair requisitos: {e}")

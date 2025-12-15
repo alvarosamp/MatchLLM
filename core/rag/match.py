@@ -1,5 +1,6 @@
 from core.llm.client import LLMClient
 from core.llm.prompt import MATCH_PROMPT
+import json
 
 class Matcher:
     """
@@ -18,4 +19,24 @@ class Matcher:
             produto = produto_json,
             edital = "\n".join(edital_chunks)
         )
-        return self.llm_client.generate(prompt)
+        raw = self.llm_client.generate(prompt)
+        # Pós-processamento: tenta extrair apenas o array JSON caso o modelo inclua texto extra
+        if isinstance(raw, str):
+            try:
+                # Se já é JSON puro
+                parsed = json.loads(raw)
+                return json.dumps(parsed, ensure_ascii=False)
+            except Exception:
+                pass
+            # Extrai o conteúdo entre o primeiro '[' e o último ']' para tentar isolar o array
+            start = raw.find('[')
+            end = raw.rfind(']')
+            if start != -1 and end != -1 and end > start:
+                snippet = raw[start:end+1]
+                try:
+                    parsed = json.loads(snippet)
+                    return json.dumps(parsed, ensure_ascii=False)
+                except Exception:
+                    # Retorna o snippet bruto se parse falhar, para facilitar depuração
+                    return snippet
+        return raw
