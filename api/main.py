@@ -9,6 +9,10 @@ def create_app() -> FastAPI:
 
     app.include_router(edital_routes.router)
 
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
+
     return app
 
 

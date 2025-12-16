@@ -58,6 +58,13 @@ class LLMClient:
             "stream": False,
             "options": options,
         }
+        # Optional prompt logging for debugging (enable via env LLM_LOG_PROMPT=1)
+        try:
+            if str(os.getenv("LLM_LOG_PROMPT", "0")).lower() in ("1", "true", "yes"):
+                short = (prompt[:1000] + "...") if isinstance(prompt, str) and len(prompt) > 1000 else prompt
+                print(f"[LLM_PROMPT] model={self.model} base_url={self.base_url} prompt={short}")
+        except Exception:
+            pass
         if force_json:
             payload["format"] = "json"
 

@@ -31,6 +31,7 @@ import json as jsonlib
 from dotenv import load_dotenv
 from urllib.parse import urlparse, urlunparse
 
+
 # Importa componentes para ler e interpretar datasheets
 from core.ocr.extractor import PDFExtractor
 from core.ocr.normalizador import normalize_text

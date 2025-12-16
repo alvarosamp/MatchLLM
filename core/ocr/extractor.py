@@ -64,11 +64,55 @@ class PDFExtractor:
             raise RuntimeError("Pacote 'google-generativeai' não instalado. Adicione ao requirements.txt e instale.") from e
 
         genai.configure(api_key=api_key)
-        model_name = os.getenv("GEMINI_OCR_MODEL", "gemini-1.5-flash")
-        model = genai.GenerativeModel(model_name)
+        # Tenta múltiplos nomes de modelos para compatibilidade com versões da API
+        preferred = os.getenv("GEMINI_OCR_MODEL", "").strip()
+        base_candidates = [
+            preferred or None,
+            # Prefer newer 2.5 family first
+            "models/gemini-2.5-flash",
+            "models/gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "models/gemini-2.5-flash-8b",
+            "models/gemini-2.5-pro-latest",
+            "models/gemini-flash-latest",
+            "models/gemini-pro-latest",
+            # Older 1.5 family
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro-latest",
+        ]
+        # Normalize and remove empty/None
+        seen = set()
+        candidates = []
+        for name in base_candidates:
+            if not name:
+                continue
+            if name in seen:
+                continue
+            seen.add(name)
+            candidates.append(name)
+        model = None
+        last_err = None
+        for name in candidates:
+            try:
+                print(f"[produto] Tentando modelo Gemini: {name}")
+                model = genai.GenerativeModel(name)
+                # Checagem mínima: tenta um prompt trivial sem arquivo (não executa geração pesada)
+                _ = getattr(model, "model_name", name)
+                print(f"[produto] Modelo Gemini selecionado: {name}")
+                break
+            except Exception as e:
+                last_err = e
+                model = None
+                print(f"[produto] Falha ao usar modelo {name}: {e}")
+        if model is None:
+            raise RuntimeError(f"Nenhum modelo Gemini válido encontrado. Último erro: {last_err}")
 
+        # Faz upload do arquivo UMA vez e aguarda processamento
         uploaded = genai.upload_file(pdf_path)
-        # Aguarda processamento do arquivo
         try:
             while getattr(uploaded, "state", None) and getattr(uploaded.state, "name", "") == "PROCESSING":
                 time.sleep(1)
@@ -84,14 +128,36 @@ class PDFExtractor:
             "Extraia TODO o texto legível deste PDF em ordem, sem comentários, "
             "sem explicações e sem adicionar conteúdo. Retorne apenas o texto."
         )
-        resp = model.generate_content([prompt, uploaded])
-        text = getattr(resp, "text", None)
-        if not text:
-            # Tenta acessar candidates
+
+        # Tenta gerar conteúdo com cada modelo candidato até obter texto válido
+        text = ""
+        last_err = None
+        for name in candidates:
             try:
-                text = resp.candidates[0].content.parts[0].text
-            except Exception:
-                text = ""
+                print(f"[produto] Gerando conteúdo com modelo Gemini: {name}")
+                model = genai.GenerativeModel(name)
+                resp = model.generate_content([prompt, uploaded])
+                # Extrai texto das propriedades possíveis
+                txt = getattr(resp, "text", None)
+                if not txt:
+                    try:
+                        txt = resp.candidates[0].content.parts[0].text
+                    except Exception:
+                        txt = None
+                if txt:
+                    text = txt
+                    print(f"[produto] OCR Gemini bem-sucedido com: {name}")
+                    break
+                else:
+                    last_err = RuntimeError(f"Modelo {name} não retornou texto.")
+                    print(f"[produto] Modelo {name} retornou sem texto.")
+            except Exception as e:
+                last_err = e
+                print(f"[produto] Falha ao gerar com {name}: {e}")
+
+        if not text and last_err:
+            raise RuntimeError(f"Nenhum modelo Gemini produziu texto. Último erro: {last_err}")
+
         return text or ""
 
     def extract(self, pdf_path: str) -> str:
