@@ -5,8 +5,14 @@ import asyncio
 import uuid
 from typing import List
 from pathlib import Path
+
 from api.models.edital import Produto
-from api.services.edital_service import processar_edital, rodar_match, extrair_requisitos, rodar_match_com_requisitos
+from api.services.edital_service import (
+    processar_edital,
+    rodar_match,
+    extrair_requisitos,
+    rodar_match_com_requisitos,
+)
 
 # Logger para registrar exceções completas (útil para debugar 500s)
 logger = logging.getLogger(__name__)
@@ -46,10 +52,12 @@ async def upload_edital(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        # Loga traceback completo antes de retornar 500 para facilitar diagnóstico
         logger.exception("Falha ao processar edital")
-        # Retorna detalhes do erro para facilitar diagnóstico
-        raise HTTPException(status_code=500, detail=f"Falha ao processar edital: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao processar edital: {e}",
+        )
+
 
 @router.post("/match/{edital_id}")
 async def match_edital(
@@ -65,8 +73,8 @@ async def match_edital(
     consulta: string usada para buscar trechos relevantes (ex: "switch 24 portas poe")
     """
     try:
+        # ---------- Caminho com requisitos extraídos ----------
         if use_requisitos:
-            # Tenta usar requisitos previamente extraídos; se não houver, tenta extrair primeiro
             try:
                 itens = rodar_match_com_requisitos(produto, edital_id, model=model)
                 return {"edital_id": edital_id, "resultado": itens}
@@ -74,43 +82,78 @@ async def match_edital(
                 _ = extrair_requisitos(edital_id, model=model)
                 itens = rodar_match_com_requisitos(produto, edital_id, model=model)
                 return {"edital_id": edital_id, "resultado": itens}
-        else:
-            # If async_job requested, schedule background job and return 202 with job_id
-            if async_job:
-                job_id = uuid.uuid4().hex
-                JOBS[job_id] = {"status": "pending"}
-                # schedule background execution
-                # choose correct function depending on use_requisitos flag (already in else so use rodar_match)
-                asyncio.create_task(_run_match_job(job_id, rodar_match, produto, edital_id, consulta, model))
-                return {"job_id": job_id, "status": "pending", "poll_url": f"/editais/match/job/{job_id}"}, 202
 
-            # synchronous path (existing behavior)
-            result = rodar_match(produto, edital_id, consulta, model=model)
-            # Tenta normalizar o resultado como JSON estruturado
-            result_json = None
-            if isinstance(result, (dict, list)):
-                result_json = result
-            elif isinstance(result, str):
-                try:
-                    result_json = json.loads(result)
-                except Exception:
-                    # tenta extrair array/objeto de dentro da string
-                    start = result.find('[')
-                    end = result.rfind(']')
-                    if start != -1 and end != -1 and end > start:
-                        snippet = result[start:end+1]
-                        try:
-                            result_json = json.loads(snippet)
-                        except Exception:
-                            result_json = None
-            return {"edital_id": edital_id, "resultado_llm": result, "resultado": result_json}
+        # ---------- Caminho assíncrono ----------
+        if async_job:
+            job_id = uuid.uuid4().hex
+            JOBS[job_id] = {"status": "pending"}
+            asyncio.create_task(
+                _run_match_job(job_id, rodar_match, produto, edital_id, consulta, model)
+            )
+            return {
+                "job_id": job_id,
+                "status": "pending",
+                "poll_url": f"/editais/match/job/{job_id}",
+            }, 202
+
+        # ---------- Caminho síncrono ----------
+        result = rodar_match(produto, edital_id, consulta, model=model)
+
+        # Tenta normalizar o resultado como JSON estruturado
+        result_json = None
+        if isinstance(result, (dict, list)):
+            result_json = result
+        elif isinstance(result, str):
+            try:
+                result_json = json.loads(result)
+            except Exception:
+                start = result.find("[")
+                end = result.rfind("]")
+                if start != -1 and end != -1 and end > start:
+                    snippet = result[start : end + 1]
+                    try:
+                        result_json = json.loads(snippet)
+                    except Exception:
+                        result_json = None
+
+        return {
+            "edital_id": edital_id,
+            "resultado_llm": result,
+            "resultado": result_json,
+        }
+
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Índice do edital não encontrado. Reprocesse o edital.")
+        raise HTTPException(
+            status_code=404,
+            detail="Índice do edital não encontrado. Reprocesse o edital.",
+        )
+
     except HTTPException:
         raise
+
     except Exception as e:
+        # 🔥 AQUI ESTÁ A CORREÇÃO CERTA 🔥
         logger.exception("Falha no match")
-        raise HTTPException(status_code=500, detail=f"Falha no match: {e}")
+
+        msg = str(e).lower()
+
+        # Timeout / lentidão do LLM (Ollama)
+        if (
+            "timeout" in msg
+            or "tempo de espera" in msg
+            or "ollama" in msg
+            or "llm" in msg
+        ):
+            raise HTTPException(
+                status_code=504,
+                detail=str(e),
+            )
+
+        # Erro real da aplicação
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha no match: {e}",
+        )
 
 
 @router.get("/match/job/{job_id}")
@@ -120,6 +163,7 @@ async def get_match_job(job_id: str):
     if info is None:
         raise HTTPException(status_code=404, detail="Job não encontrado")
     return info
+
 
 @router.get("/ids")
 async def listar_editais_indexados() -> List[int]:
@@ -135,16 +179,29 @@ async def listar_editais_indexados() -> List[int]:
                 continue
     return sorted(ids)
 
+
 @router.post("/requisitos/{edital_id}")
 async def gerar_requisitos(edital_id: int, model: str | None = None, max_chunks: int = 20):
     """Extrai itens/requisitos do edital já indexado e salva em JSON."""
     try:
-        # Passa max_chunks para controlar o tamanho do contexto enviado ao LLM
         from core.pipeline import extract_requisitos_edital
-        info = extract_requisitos_edital(edital_id, model=model, max_chunks=max_chunks)
+
+        info = extract_requisitos_edital(
+            edital_id,
+            model=model,
+            max_chunks=max_chunks,
+        )
         return info
+
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Índice do edital não encontrado. Reprocesse o edital.")
+        raise HTTPException(
+            status_code=404,
+            detail="Índice do edital não encontrado. Reprocesse o edital.",
+        )
+
     except Exception as e:
         logger.exception("Falha ao extrair requisitos do edital")
-        raise HTTPException(status_code=500, detail=f"Falha ao extrair requisitos: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao extrair requisitos: {e}",
+        )
