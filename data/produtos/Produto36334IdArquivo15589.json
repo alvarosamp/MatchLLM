@@ -1,19 +1,5 @@
 {
-  "nome": "12MVA-7",
-  "atributos": {
-    "capacidade_comutacao_gbps": null,
-    "temperatura_operacao_c": {
-      "min": -15,
-      "max": 50
-    },
-    "dimensoes_mm": {
-      "largura": 151,
-      "altura": 98,
-      "profundidade": 65
-    },
-    "peso_kg": 2.1,
-    "consumo_w": null,
-    "garantia_meses": 12
-  },
+  "nome": "Produto36334IdArquivo15589",
+  "atributos": {},
   "origem": "Produto36334IdArquivo15589.pdf"
 }

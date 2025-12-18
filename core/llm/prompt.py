@@ -27,9 +27,23 @@ Estrutura EXATA esperada:
     "valor_produto": "valor correspondente no produto (ou 'N/A')",
     "status": "ATENDE" | "NAO_ATENDE" | "DUVIDA",
     "justificativa": "explicação curta, objetiva e técnica"
+    ,
+    "detalhes_tecnicos": {{
+      "tensao_v": "numero (V) ou 'N/A'",
+      "tensao_tipo": "AC|DC|BIVOLT|N/A",
+      "corrente_a": "numero (A) ou 'N/A'",
+      "potencia_w": "numero (W) ou 'N/A'",
+      "consumo_w": "numero (W) ou 'N/A'",
+      "dimensoes_mm": {{"largura": "mm or 'N/A'", "altura": "mm or 'N/A'", "profundidade": "mm or 'N/A'"}},
+      "peso_kg": "numero (kg) or 'N/A'",
+      "temperatura_operacao_c": {{"min": "graus C ou 'N/A'", "max": "graus C or 'N/A'"}},
+      "grau_ip": "IPxx ou 'N/A'",
+      "certificacoes": ["lista de strings (ex: ANATEL, CE) ou []"]
+    }}
   }}
 ]
 """
+
 
 # Prompt para extrair itens/requisitos do edital em JSON estruturado
 REQUIREMENTS_PROMPT = """

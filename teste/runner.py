@@ -415,6 +415,8 @@ def run() -> None:
                     params["use_requisitos"] = True
                 # Timeout: permite desativar se --no-timeout
                 req_timeout = None if args.no_timeout else args.timeout_match
+                # Request the API in async-job mode to avoid runner-side timeouts while the server runs LLM
+                params["async_job"] = True
                 r2 = requests.post(
                     f"{API_BASE_URL}/editais/match/{edital_id}",
                     params=params,
@@ -422,6 +424,61 @@ def run() -> None:
                     headers=headers,
                     timeout=req_timeout,
                 )
+
+                # If server accepted a background job, poll its status
+                if r2.status_code == 202:
+                    info = r2.json()
+                    job_id = info.get("job_id")
+                    poll_url = f"{API_BASE_URL}/editais/match/job/{job_id}"
+                    print(f"\n[match {i}] Job agendado: {job_id}. Fazendo polling em {poll_url}")
+                    start = time.time()
+                    poll_interval = 2.0
+                    while True:
+                        try:
+                            pr = requests.get(poll_url, timeout=10)
+                            pr.raise_for_status()
+                            st = pr.json()
+                        except Exception as e:
+                            print(f"[match {i}] Falha ao consultar status do job: {e}")
+                            st = None
+
+                        if st and st.get("status") == "done":
+                            resp = st.get("result")
+                            print(f"\n[match {i}] OK (job {job_id} concluído):")
+                            # same printing logic as before
+                            if isinstance(resp, dict) and ("resultado" in resp or "resultado_llm" in resp):
+                                parsed = resp.get("resultado")
+                                raw = resp.get("resultado_llm")
+                                if parsed is not None:
+                                    print("Resultado estruturado:")
+                                    print(json.dumps(parsed, ensure_ascii=False, indent=2))
+                                else:
+                                    try:
+                                        raw_parsed = json.loads(raw) if isinstance(raw, str) else raw
+                                        print("Resultado (parseado do bruto):")
+                                        print(json.dumps(raw_parsed, ensure_ascii=False, indent=2))
+                                    except Exception:
+                                        print("Resultado bruto:")
+                                        print(raw)
+                            else:
+                                print(json.dumps(resp, ensure_ascii=False, indent=2))
+                            break
+
+                        if st and st.get("status") == "error":
+                            print(f"\n[match {i}] Job {job_id} falhou: {st.get('error')}")
+                            break
+
+                        # timeout global for polling
+                        if not args.no_timeout and (time.time() - start) > args.timeout_match:
+                            print(f"\n[match {i}] Polling do job {job_id} expirou após {args.timeout_match}s")
+                            break
+
+                        time.sleep(poll_interval)
+                        # exponential backoff cap
+                        poll_interval = min(poll_interval * args.backoff, 30)
+                    break
+
+                # otherwise behave like before (synchronous response)
                 r2.raise_for_status()
                 resp = r2.json()
                 print(f"\n[match {i}] OK:")
@@ -451,8 +508,11 @@ def run() -> None:
                 attempt += 1
                 # Tentar obter corpo de resposta para depuração
                 body_text = ""
+                # r2 pode não existir se a requisição falhou antes de obter response
                 try:
-                    body_text = r2.text  # r2 pode não existir em timeouts/conexão
+                    body_text = r2.text
+                except NameError:
+                    body_text = ""
                 except Exception:
                     body_text = ""
                 # Mensagem específica se backend LLM está indisponível
