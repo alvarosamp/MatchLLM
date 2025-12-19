@@ -1,4 +1,4 @@
-from database.models.produto import Produto
+from db.models.produtos import Produto
 
 
 def get_or_create(db, fabricante: str, modelo: str, specs: dict):

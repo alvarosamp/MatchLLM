@@ -44,11 +44,15 @@ async def upload_edital(file: UploadFile = File(...)):
 
     try:
         result = processar_edital(file.file)
-        return {
+        # include extraction log if available for visibility (native/ocr/gemini)
+        resp = {
             "message": "Edital processado com sucesso.",
             "edital_id": result.get("edital_id"),
             "total_chunks": result.get("total_chunks"),
         }
+        if "extraction_log" in result:
+            resp["extraction_log"] = result.get("extraction_log")
+        return resp
     except HTTPException:
         raise
     except Exception as e:

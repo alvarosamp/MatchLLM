@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, JSON, UniqueConstraint
-from database.base import Base
+from db.base import Base
 
 
 class Produto(Base):
