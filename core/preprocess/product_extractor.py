@@ -1,112 +1,121 @@
 from core.llm.client import LLMClient
 import json
-import os
+import re
+from typing import Optional, Dict, Any
+
 
 PRODUCT_EXTRACTION_PROMPT = """
-Você é um especialista técnico em leitura de datasheets.
+Você é um especialista técnico em leitura de datasheets para licitações públicas.
 
 Tarefa:
-- Ler o texto do datasheet e extrair SOMENTE especificações técnicas úteis para comparação em licitações.
-- Responda EXCLUSIVAMENTE em JSON válido (compatível com Python json.loads).
-- NÃO use markdown, comentários, explicações ou texto fora do JSON.
-- NÃO invente valores; quando não houver no texto, use null.
-- Use números quando forem quantitativos (ex.: 24), booleanos como true/false, e strings quando houver unidades.
-- Padronize chaves em minúsculas com underscore.
+- Ler o texto do datasheet.
+- Identificar o tipo principal do produto (ex: eletrônico, mecânico, TI, químico, outro).
+- Extrair APENAS especificações técnicas objetivas e mensuráveis.
+- Não inventar valores.
+- Se um atributo não estiver explicitamente no texto, NÃO inclua.
+- Responder EXCLUSIVAMENTE em JSON válido.
+
+Regras obrigatórias:
+- Não usar markdown.
+- Não usar comentários.
+- Não incluir texto fora do JSON.
+- Padronizar chaves em minúsculas com underscore.
+- Valores quantitativos devem ser números quando possível.
+- Usar string apenas quando houver unidade associada.
+
+Formato OBRIGATÓRIO:
+
+{{
+  "nome": "",
+  "tipo_produto": "",
+  "atributos": {{
+    "<nome_atributo>": {{
+      "valor": null,
+      "unidade": null
+    }}
+  }}
+}}
 
 Texto do datasheet:
 {text}
-
-Estrutura EXATA esperada (exemplo de chaves; preencha o que existir e use null no restante):
-{{
-    "nome": "...",
-    "atributos": {{
-        "portas": null,
-        "poe": null,
-        "gigabit": null,
-        "gerenciavel": null,
-        "velocidade_porta_gbps": null,
-        "capacidade_comutacao_gbps": null,
-        "throughput_mpps": null,
-        "padroes": [],
-        "vlan": null,
-        "qos": null,
-        "temperatura_operacao_c": {{"min": null, "max": null}},
-        "dimensoes_mm": {{"largura": null, "altura": null, "profundidade": null}},
-        "peso_kg": null,
-        "consumo_w": null,
-        "garantia_meses": null
-    }}
-}}
-
-Regras adicionais:
-- Inclua somente atributos que apareçam no texto; os demais mantenha como null.
-- Não inclua campos além de "nome" e "atributos" na raiz.
-- O JSON final deve ser único, sem vírgula sobrando e sem texto extra.
 """
+
 
 class ProductExtractor:
     def __init__(self):
         self.llm = LLMClient()
 
-    def extract(self, datasheet_text: str) -> dict:
-        prompt = PRODUCT_EXTRACTION_PROMPT.format(text=datasheet_text)
+    def _safe_json_load(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Tenta extrair JSON válido de uma resposta imperfeita do LLM.
+        """
+        # Remove cercas ``` se existirem
+        if "```" in text:
+            text = re.sub(r"```[a-zA-Z]*", "", text).replace("```", "").strip()
+
+        # Tentativa direta
         try:
-            response = self.llm.generate(prompt)
-        except Exception as e:
-            # Se a geração via LLM falhar (ex.: conexão/OOM), tenta OCR Gemini para melhorar texto e tenta novamente
-            use_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-            if use_gemini:
-                try:
-                    # Reutiliza o texto já recebido? Aqui espera-se que datasheet_text venha de OCR prévio.
-                    # Como alternativa, o chamador deve fornecer texto extraído; portanto, apenas re-tenta com prompt simples.
-                    response = self.llm.generate(prompt)
-                except Exception:
-                    # Continua para retornar estrutura mínima
-                    return {
-                        "nome": None,
-                        "atributos": {},
-                    }
-            else:
-                return {
-                    "nome": None,
-                    "atributos": {},
+            return json.loads(text)
+        except Exception:
+            pass
+
+        # Extrai maior bloco JSON
+        try:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                return json.loads(text[start:end + 1])
+        except Exception:
+            pass
+
+        return None
+
+    def _clean_attributes(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Remove atributos vazios ou malformados.
+        """
+        attrs = data.get("atributos", {})
+        clean_attrs = {}
+
+        for k, v in attrs.items():
+            if not isinstance(v, dict):
+                continue
+
+            valor = v.get("valor")
+            unidade = v.get("unidade")
+
+            if valor is not None:
+                clean_attrs[k] = {
+                    "valor": valor,
+                    "unidade": unidade
                 }
 
-        # Tenta parsear JSON; se falhar, retorna estrutura mínima
+        data["atributos"] = clean_attrs
+        return data
+
+    def extract(self, datasheet_text: str) -> Dict[str, Any]:
+        prompt = PRODUCT_EXTRACTION_PROMPT.replace("{text}", datasheet_text)
+
+
+        try:
+            response = self.llm.generate(prompt)
+        except Exception:
+            return {
+                "nome": None,
+                "tipo_produto": None,
+                "atributos": {}
+            }
+
         if isinstance(response, dict):
-            return response
+            return self._clean_attributes(response)
+
         if isinstance(response, str):
-            # 1) Tentativa direta
-            try:
-                return json.loads(response)
-            except Exception:
-                pass
-            # 2) Remover cercas de código ```json ... ``` se existirem
-            try:
-                if "```" in response:
-                    inner = response
-                    # pega conteúdo entre a primeira e a última cerca
-                    first = inner.find("```")
-                    last = inner.rfind("```")
-                    if first != -1 and last != -1 and last > first:
-                        inner = inner[first+3:last]
-                        # remove possível rótulo 'json' no início
-                        inner = inner.strip()
-                        if inner.lower().startswith("json"):
-                            inner = inner[4:].strip()
-                        return json.loads(inner)
-            except Exception:
-                pass
-            # 3) Extrair o maior bloco entre chaves { ... }
-            try:
-                start = response.find("{")
-                end = response.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    snippet = response[start:end+1]
-                    return json.loads(snippet)
-            except Exception:
-                pass
+            parsed = self._safe_json_load(response)
+            if parsed:
+                return self._clean_attributes(parsed)
+
         return {
             "nome": None,
-            "atributos": {},
+            "tipo_produto": None,
+            "atributos": {}
         }

@@ -1,178 +1,139 @@
-import pdfplumber
 import os
 import time
+import pdfplumber
+
 
 class PDFExtractor:
     """
-    Extrai o texto de um pdf
-    1 -> Tenta ler o arquivo nativo (PDF DIGGERIDO)
-    2-> Se nao der, roda o OCR (PDF IMAGEM)
+    Extrai texto de PDFs com fallback automático:
+    1) Texto nativo (PDF com texto embutido)
+    2) OCR via Gemini (PDF escaneado / imagem)
+
+    Requer:
+    - pdfplumber
+    - google-generativeai
+    - Variável de ambiente: GEMINI_API_KEY ou GOOGLE_API_KEY
     """
 
     def __init__(self):
-        # Adia carregamento do modelo OCR para evitar falhas quando não instalado
-        self.ocr_model = None
+        self._gemini_model = None
 
+    # ------------------------------------------------------------------
+    # 1) Extração nativa (PDF com texto embutido)
+    # ------------------------------------------------------------------
     def extract_text_native(self, pdf_path: str) -> str | None:
         """
-        Extrai texto de PDF que possuem texto embutido
-        Retorna None se der erro ou nao tiver texto util
-        """
-        try: 
-            with pdfplumber.open(pdf_path) as pdf:
-                texto = ""
-                for pagina in pdf.pages:
-                    page_txt = pagina.extract_text()
-                    if page_txt:
-                        texto += page_txt + "\n"
-            return texto if texto.strip() else None
-        except Exception as e:
-            print(f"Erro ao extrair texto nativo: {e}")
-            return None
-        
-    def extract_text_ocr(self, pdf_path: str) -> str:
-        """
-        Extrai o texto de pdf escaneados usando ocr
-        Retorna o texto extraido
+        Extrai texto de PDFs que possuem texto embutido.
+        Retorna None se não houver texto útil.
         """
         try:
-            from doctr.io import DocumentFile
-            from doctr.models import ocr_predictor
-        except ImportError:
-            raise RuntimeError(
-                "OCR não disponível: instale 'python-doctr' e dependências (torch/torchvision)."
-            )
+            with pdfplumber.open(pdf_path) as pdf:
+                texto = []
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        texto.append(page_text)
 
-        if self.ocr_model is None:
-            self.ocr_model = ocr_predictor(pretrained=True)
+            text = "\n".join(texto).strip()
+            return text if text else None
 
-        doc = DocumentFile.from_pdf(pdf_path)
-        result = self.ocr_model(doc)
-        return result.render()
-    
+        except Exception as e:
+            print(f"[native] Erro ao extrair texto nativo: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # 2) OCR via Gemini (fallback)
+    # ------------------------------------------------------------------
     def extract_text_gemini(self, pdf_path: str) -> str:
         """
-        Extrai texto usando o Gemini (Google Generative AI) via Files API.
-        Requer a variável de ambiente GEMINI_API_KEY (ou GOOGLE_API_KEY).
+        Extrai texto usando Gemini (Google Generative AI) via Files API.
         """
+
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            raise RuntimeError("GEMINI_API_KEY/GOOGLE_API_KEY não definida para OCR com Gemini.")
+            raise RuntimeError("GEMINI_API_KEY ou GOOGLE_API_KEY não definida.")
+
         try:
             import google.generativeai as genai
         except ImportError as e:
-            raise RuntimeError("Pacote 'google-generativeai' não instalado. Adicione ao requirements.txt e instale.") from e
+            raise RuntimeError(
+                "Pacote 'google-generativeai' não instalado."
+            ) from e
 
         genai.configure(api_key=api_key)
-        # Tenta múltiplos nomes de modelos para compatibilidade com versões da API
-        preferred = os.getenv("GEMINI_OCR_MODEL", "").strip()
-        base_candidates = [
-            preferred or None,
-            # Prefer newer 2.5 family first
+
+        # Lista de modelos tentados (do mais novo para o mais estável)
+        models = [
+            os.getenv("GEMINI_OCR_MODEL"),
             "models/gemini-2.5-flash",
             "models/gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-            "models/gemini-2.5-flash-8b",
-            "models/gemini-2.5-pro-latest",
             "models/gemini-flash-latest",
             "models/gemini-pro-latest",
-            # Older 1.5 family
-            "gemini-1.5-flash-8b",
             "gemini-1.5-flash",
             "gemini-1.5-pro",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-pro-latest",
         ]
-        # Normalize and remove empty/None
-        seen = set()
-        candidates = []
-        for name in base_candidates:
-            if not name:
-                continue
-            if name in seen:
-                continue
-            seen.add(name)
-            candidates.append(name)
-        model = None
-        last_err = None
-        for name in candidates:
-            try:
-                print(f"[produto] Tentando modelo Gemini: {name}")
-                model = genai.GenerativeModel(name)
-                # Checagem mínima: tenta um prompt trivial sem arquivo (não executa geração pesada)
-                _ = getattr(model, "model_name", name)
-                print(f"[produto] Modelo Gemini selecionado: {name}")
-                break
-            except Exception as e:
-                last_err = e
-                model = None
-                print(f"[produto] Falha ao usar modelo {name}: {e}")
-        if model is None:
-            raise RuntimeError(f"Nenhum modelo Gemini válido encontrado. Último erro: {last_err}")
 
-        # Faz upload do arquivo UMA vez e aguarda processamento
+        # Remove None e duplicados
+        models = list(dict.fromkeys(filter(None, models)))
+
+        # Upload do PDF (feito uma única vez)
         uploaded = genai.upload_file(pdf_path)
-        try:
-            while getattr(uploaded, "state", None) and getattr(uploaded.state, "name", "") == "PROCESSING":
-                time.sleep(1)
-                uploaded = genai.get_file(uploaded.name)
-        except Exception:
-            pass
 
-        state_name = getattr(getattr(uploaded, "state", None), "name", "ACTIVE")
-        if state_name != "ACTIVE":
-            raise RuntimeError(f"Falha no upload do PDF para Gemini (estado={state_name}).")
+        while getattr(uploaded, "state", None) and uploaded.state.name == "PROCESSING":
+            time.sleep(1)
+            uploaded = genai.get_file(uploaded.name)
+
+        if uploaded.state.name != "ACTIVE":
+            raise RuntimeError(f"Falha no upload do PDF (estado={uploaded.state.name})")
 
         prompt = (
-            "Extraia TODO o texto legível deste PDF em ordem, sem comentários, "
-            "sem explicações e sem adicionar conteúdo. Retorne apenas o texto."
+            "Extraia TODO o texto legível deste PDF em ordem correta. "
+            "Não explique, não resuma, não altere o conteúdo. "
+            "Retorne apenas o texto bruto."
         )
 
-        # Tenta gerar conteúdo com cada modelo candidato até obter texto válido
-        text = ""
-        last_err = None
-        for name in candidates:
+        last_error = None
+
+        for model_name in models:
             try:
-                print(f"[produto] Gerando conteúdo com modelo Gemini: {name}")
-                model = genai.GenerativeModel(name)
-                resp = model.generate_content([prompt, uploaded])
-                # Extrai texto das propriedades possíveis
-                txt = getattr(resp, "text", None)
-                if not txt:
+                print(f"[gemini] Tentando modelo: {model_name}")
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content([prompt, uploaded])
+
+                text = getattr(response, "text", None)
+
+                if not text:
                     try:
-                        txt = resp.candidates[0].content.parts[0].text
+                        text = response.candidates[0].content.parts[0].text
                     except Exception:
-                        txt = None
-                if txt:
-                    text = txt
-                    print(f"[produto] OCR Gemini bem-sucedido com: {name}")
-                    break
-                else:
-                    last_err = RuntimeError(f"Modelo {name} não retornou texto.")
-                    print(f"[produto] Modelo {name} retornou sem texto.")
+                        text = None
+
+                if text and text.strip():
+                    print(f"[gemini] OCR bem-sucedido com: {model_name}")
+                    return text.strip()
+
             except Exception as e:
-                last_err = e
-                print(f"[produto] Falha ao gerar com {name}: {e}")
+                last_error = e
+                print(f"[gemini] Falha com {model_name}: {e}")
 
-        if not text and last_err:
-            raise RuntimeError(f"Nenhum modelo Gemini produziu texto. Último erro: {last_err}")
+        raise RuntimeError(f"Nenhum modelo Gemini produziu texto. Último erro: {last_error}")
 
-        return text or ""
-
+    # ------------------------------------------------------------------
+    # Pipeline principal
+    # ------------------------------------------------------------------
     def extract(self, pdf_path: str) -> str:
         """
-        Extrai o texto de um pdf, tentando primeiro o metodo nativo
-        e depois o OCR se necessario
-        Retorna o texto extraido
+        Pipeline de extração com fallback automático.
         """
-        texto = self.extract_text_native(pdf_path)
-        if texto is not None:
-            return texto
-        # Sem texto nativo, tenta OCR se disponível
+
+        # 1) Texto nativo
+        text = self.extract_text_native(pdf_path)
+        if text:
+            return text
+
+        # 2) OCR via Gemini
         try:
-            return self.extract_text_ocr(pdf_path)
-        except RuntimeError as e:
-            # OCR não instalado; informa e retorna string vazia para seguir fluxo
-            print(str(e))
+            return self.extract_text_gemini(pdf_path)
+        except Exception as e:
+            print(f"[extract] Falha total na extração: {e}")
             return ""
