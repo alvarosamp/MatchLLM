@@ -1,0 +1,58 @@
+COMO RODAR (MatchLLM)
+
+Recomendado: usar o venv que já existe em .venv.
+
+1) Ativar o ambiente (PowerShell)
+
+  & C:\Users\vish8\OneDrive\Documentos\MatchLLM\.venv\Scripts\Activate.ps1
+
+2) Rodar em lote (todos os PDFs em data/editais)
+
+OFFLINE (sem LLM, usa fallbacks heurísticos):
+
+  $py = "C:/Users/vish8/OneDrive/Documentos/MatchLLM/.venv/Scripts/python.exe"
+  $env:LLM_DISABLE = "1"
+  & $py .\run_editais.py
+
+COM LLM (Ollama ou outro endpoint configurado):
+
+  $py = "C:/Users/vish8/OneDrive/Documentos/MatchLLM/.venv/Scripts/python.exe"
+  $env:LLM_DISABLE = "0"
+  # se estiver rodando local, tipicamente: http://localhost:11434
+  # se estiver rodando via docker-compose, tipicamente: http://ollama:11434
+  # $env:LLM_URL = "http://localhost:11434"
+  # $env:LLM_MODEL = "llama3.1"
+  & $py .\run_editais.py
+
+3) Rodar um único par (edital + produto)
+
+  $py = "C:/Users/vish8/OneDrive/Documentos/MatchLLM/.venv/Scripts/python.exe"
+  & $py .\run_pipeline.py
+
+Obs.: o run_pipeline.py usa os arquivos padrão do projeto (ver o próprio arquivo para paths).
+
+4) Ajustes úteis via variáveis de ambiente
+
+Filtro por sequência (gating; para na primeira falha):
+
+  $env:SEQUENCE_FILTER = "corrente_a,capacidade_ah,tensao_v"
+
+Requisitos-chave (podem fazer override conforme policy):
+
+  $env:IMPORTANT_REQUIREMENTS = "tensao_v"
+  $env:KEY_REQUIREMENTS_POLICY = "any"   # any | all
+
+Tolerância numérica (reduz falsos NAO_ATENDE em valores próximos):
+
+  $env:MATCH_TOLERANCE_PCT = "5"          # ex.: 5% de tolerância
+  $env:MATCH_TOLERANCE_OVERRIDES = "tensao_v=10,capacidade_ah=15"
+
+5) Onde saem os resultados
+
+- JSON por edital: resultados_e2e_local/
+- O nome do arquivo de saída é mostrado no final do relatório.
+
+SEGURANÇA / CHAVES
+
+- Evite commitar arquivos .env com chaves (GOOGLE_API_KEY/GEMINI_API_KEY).
+- Se você for compartilhar o projeto, remova/mascare essas chaves antes.

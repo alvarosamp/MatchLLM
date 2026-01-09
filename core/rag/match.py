@@ -1,48 +1,42 @@
-import json
-from typing import Dict, List, Any
-
 from core.llm.client import LLMClient
-from core.pipeline import (
-    comparar_produto_com_requisitos,
-    extrair_requisitos_edital,
-)
-
+from core.llm.prompt import MATCH_PROMPT
+import json
 
 class Matcher:
     """
-    Responsável por orquestrar:
-    - extração de requisitos do edital
-    - comparação técnica com o produto
-    - explicação técnica via LLM
+    Junta produto + trechos relevantes do edital
     """
-
     def __init__(self, llm_client: LLMClient | None = None, model: str | None = None):
+        # Se um cliente não for fornecido, cria um com possível override de modelo
         self.llm_client = llm_client or LLMClient(model=model)
 
-    def compare(
-        self,
-        produto: Dict[str, Any],
-        edital_chunks: List[str],
-    ) -> Dict[str, Any]:
+    def compare(self, produto_json: dict, edital_chunks: list[str]) -> str:
         """
-        produto: JSON técnico do produto (já normalizado)
-        edital_chunks: trechos relevantes do edital
+        Dado o produto em JSON e os trechos relevantes do edital,
+        retorna a resposta do LLM com a comparação.
         """
-
-        # 1. Extrair requisitos técnicos do edital
-        requisitos = extrair_requisitos_edital(
-            edital_chunks=edital_chunks,
-            llm_client=self.llm_client,
+        prompt = MATCH_PROMPT.format(
+            produto = produto_json,
+            edital = "\n".join(edital_chunks)
         )
-
-        # 2. Comparação técnica + explicação
-        resultado = comparar_produto_com_requisitos(
-            produto_specs=produto,
-            requisitos=requisitos,
-            llm_client=self.llm_client,
-        )
-
-        return {
-            "requisitos": requisitos,
-            "resultado": resultado,
-        }
+        raw = self.llm_client.generate(prompt)
+        # Pós-processamento: tenta extrair apenas o array JSON caso o modelo inclua texto extra
+        if isinstance(raw, str):
+            try:
+                # Se já é JSON puro
+                parsed = json.loads(raw)
+                return json.dumps(parsed, ensure_ascii=False)
+            except Exception:
+                pass
+            # Extrai o conteúdo entre o primeiro '[' e o último ']' para tentar isolar o array
+            start = raw.find('[')
+            end = raw.rfind(']')
+            if start != -1 and end != -1 and end > start:
+                snippet = raw[start:end+1]
+                try:
+                    parsed = json.loads(snippet)
+                    return json.dumps(parsed, ensure_ascii=False)
+                except Exception:
+                    # Retorna o snippet bruto se parse falhar, para facilitar depuração
+                    return snippet
+        return raw

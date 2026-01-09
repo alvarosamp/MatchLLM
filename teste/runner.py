@@ -11,6 +11,8 @@ Observações:
 - Se o upload falhar, usa o último índice existente em data/processed/vectorstore.
 - O JSON de produto é um template simples; ajuste conforme necessário.
 """
+from __future__ import annotations
+
 # Ajusta caminho para permitir importar módulos 'core' quando executado via python teste/runner.py
 import sys
 from pathlib import Path as _Path
@@ -28,93 +30,15 @@ import time
 import json as jsonlib
 from dotenv import load_dotenv
 from urllib.parse import urlparse, urlunparse
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 # Importa componentes para ler e interpretar datasheets
 from core.ocr.extractor import PDFExtractor
 from core.ocr.normalizador import normalize_text
 from core.preprocess.product_extractor import ProductExtractor
-
-
-def _print_match_explanations(resp_obj):
-    """Pretty-print match items with justificativas (why) when available."""
-    # Ignore job-envelope responses accidentally passed here
-    if isinstance(resp_obj, dict) and set(resp_obj.keys()) >= {"job_id", "status"}:
-        print("[match] Resp é envelope de job; pulando explicações até o job completar.")
-        return
-    def _load_items(x):
-        # x may be list, dict or str containing JSON
-        if x is None:
-            return None
-        if isinstance(x, list):
-            return x
-        if isinstance(x, dict):
-            # maybe wrapped
-            if "resultado" in x and x.get("resultado") is not None:
-                return x.get("resultado")
-            if "resultado_llm" in x and x.get("resultado_llm") is not None:
-                raw = x.get("resultado_llm")
-                try:
-                    return jsonlib.loads(raw) if isinstance(raw, str) else raw
-                except Exception:
-                    return None
-            # direct dict of items?
-            # if keys look like item entries (list-like), try to turn into list
-            return x
-        if isinstance(x, str):
-            try:
-                parsed = jsonlib.loads(x)
-                return parsed
-            except Exception:
-                return None
-        return None
-
-    items = _load_items(resp_obj)
-    if not items:
-        print("[match] Nenhuma estrutura de itens para exibir justificativas.")
-        return
-
-    # If items is a dict with named keys, try to extract list under 'items' or similar
-    if isinstance(items, dict) and "items" in items and isinstance(items["items"], list):
-        items = items["items"]
-
-    if isinstance(items, dict):
-        # single item
-        items = [items]
-
-    if not isinstance(items, list):
-        print("[match] Resultado não é uma lista de itens." )
-        return
-
-    print("\n[match] Detalhes por item (por que):")
-    for idx, it in enumerate(items, start=1):
-        try:
-            requisito = it.get("requisito") or it.get("titulo") or it.get("item_id") or "N/A"
-            valor = it.get("valor_produto") or it.get("valor") or "N/A"
-            status = it.get("status") or it.get("veredito") or "N/A"
-            # normalize common unexpected LLM outputs
-            if isinstance(status, str) and status.strip().lower() in {"pending", "pendente"}:
-                status = "DUVIDA"
-            justificativa = it.get("justificativa") or it.get("justificacao") or it.get("explicacao") or ""
-            print(f"\n  {idx}. requisito: {requisito}")
-            print(f"     status: {status}")
-            print(f"     valor_produto: {valor}")
-            if justificativa:
-                print(f"     justificativa: {justificativa}")
-            # detalhes_tecnicos if present
-            detalhes = it.get("detalhes_tecnicos") or it.get("produto_detalhes_tecnicos")
-            if detalhes:
-                # print compact summary
-                try:
-                    if isinstance(detalhes, dict):
-                        keys = list(detalhes.keys())[:8]
-                        for k in keys:
-                            v = detalhes.get(k)
-                            print(f"       - {k}: {v}")
-                except Exception:
-                    pass
-        except Exception:
-            continue
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -168,17 +92,17 @@ def upload_edital(edital_pdf: Path) -> Optional[tuple[int, Optional[int]]]:
         resp = r.json()
         return resp.get("edital_id"), resp.get("total_chunks")
     except requests.exceptions.HTTPError as e:
-        print(f"[upload] HTTPError: {e}")
+        logger.exception("[upload] HTTPError")
         # fallback: usa índice existente
         ids = list_index_ids()
         if ids:
             return ids[-1], None
         return None
     except requests.exceptions.RequestException as e:
-        print(f"[upload] erro de requisição: {e}")
+        logger.exception("[upload] erro de requisição")
         return None
     except ValueError:
-        print(f"[upload] resposta não é JSON válida")
+        logger.exception("[upload] resposta não é JSON válida")
         return None
 
 
@@ -191,7 +115,7 @@ def produto_from_datasheet(pdf: Path) -> dict:
     try:
         raw_text = extractor.extract(str(pdf))
     except Exception as e:
-        print(f"[produto] Falha ao ler datasheet {pdf.name}: {e}. Usando template simples.")
+        logger.exception("[produto] Falha ao ler datasheet %s", pdf.name)
         raw_text = ""
     norm_text = normalize_text(raw_text or "")
 
@@ -242,7 +166,7 @@ def produto_from_datasheet(pdf: Path) -> dict:
             use_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
             if miss1 >= 0.7 and use_gemini:
                 try:
-                    print("[produto] Muitos campos ausentes (>=70%). Tentando OCR via Gemini...")
+                    logger.info("[produto] Muitos campos ausentes (>=70%). Tentando OCR via Gemini...")
                     extractor_g = PDFExtractor()
                     raw_text2 = extractor_g.extract_text_gemini(str(pdf))
                     norm_text2 = normalize_text(raw_text2 or "")
@@ -254,9 +178,9 @@ def produto_from_datasheet(pdf: Path) -> dict:
                             data1 = data2
                             miss1 = miss2
                             if os.getenv("RUNNER_VERBOSE"):
-                                print(f"[produto] OCR Gemini melhorou preenchimento: {miss1:.0%} ausentes")
+                                logger.info("[produto] OCR Gemini melhorou preenchimento: %.0f%% ausentes", miss1*100)
                 except Exception as e2:
-                    print(f"[produto] OCR via Gemini falhou: {e2}")
+                    logger.exception("[produto] OCR via Gemini falhou: %s", e2)
 
             return {
                 "nome": data1.get("nome") or pdf.stem,
@@ -268,7 +192,7 @@ def produto_from_datasheet(pdf: Path) -> dict:
         use_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
         if use_gemini:
             try:
-                print(f"[produto] Extração via LLM falhou: {e}. Tentando OCR via Gemini...")
+                logger.info("[produto] Extração via LLM falhou: %s. Tentando OCR via Gemini...", e)
                 raw_text2 = PDFExtractor().extract_text_gemini(str(pdf))
                 norm_text2 = normalize_text(raw_text2 or "")
                 pe = ProductExtractor()
@@ -281,9 +205,9 @@ def produto_from_datasheet(pdf: Path) -> dict:
                         "origem": pdf.name,
                     }
             except Exception as e2:
-                print(f"[produto] OCR via Gemini também falhou: {e2}")
+                logger.exception("[produto] OCR via Gemini também falhou: %s", e2)
         else:
-            print(f"[produto] Extração de atributos via LLM falhou: {e}. Usando template simples.")
+            logger.exception("[produto] Extração de atributos via LLM falhou: %s", e)
 
     # Fallback simples
     return {
@@ -450,26 +374,6 @@ def run() -> None:
                     print(f"[produto] JSON gerado: {out.name}")
             except Exception as e:
                 print(f"[produto] Falha ao materializar {pdf.name}: {e}")
-        # após gerar JSONs, poste-os para a API para persistir no DB
-        try:
-            json_files = list_jsons(PRODUTOS_DIR)
-            for jf in json_files:
-                try:
-                    pj = jsonlib.loads(jf.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
-                # POST para /produtos/json para persistir
-                try:
-                    r = requests.post(f"{API_BASE_URL}/produtos/json", json=pj, timeout=30)
-                    if r.status_code == 200:
-                        if args.verbose:
-                            print(f"[produto] Persistido no DB: {jf.name} -> {r.json()}")
-                    else:
-                        print(f"[produto] Falha ao persistir {jf.name}: {r.status_code} {r.text}")
-                except Exception as e:
-                    print(f"[produto] Erro ao postar produto {jf.name}: {e}")
-        except Exception as e:
-            print(f"[produto] Erro ao iterar JSONs gerados: {e}")
 
     # Se solicitado, extrai requisitos via API
     if args.extract_requisitos:
@@ -514,8 +418,6 @@ def run() -> None:
                     params["use_requisitos"] = True
                 # Timeout: permite desativar se --no-timeout
                 req_timeout = None if args.no_timeout else args.timeout_match
-                # Request the API in async-job mode to avoid runner-side timeouts while the server runs LLM
-                params["async_job"] = True
                 r2 = requests.post(
                     f"{API_BASE_URL}/editais/match/{edital_id}",
                     params=params,
@@ -523,75 +425,6 @@ def run() -> None:
                     headers=headers,
                     timeout=req_timeout,
                 )
-
-                # If server accepted a background job, poll its status
-                if r2.status_code == 202:
-                    info = r2.json()
-                    job_id = info.get("job_id")
-                    poll_url = f"{API_BASE_URL}/editais/match/job/{job_id}"
-                    print(f"\n[match {i}] Job agendado: {job_id}. Fazendo polling em {poll_url}")
-                    # Mostrar visualização do produto antes do polling para facilitar inspeção
-                    try:
-                        print(f"\n[match {i}] Produto (visualização):")
-                        # imprime o JSON do produto de forma legível
-                        print(json.dumps(prod, ensure_ascii=False, indent=2))
-                        # imprime resumo de atributos técnicos se existirem
-                        attrs = prod.get("atributos") or prod.get("specs") or {}
-                        if isinstance(attrs, dict) and attrs:
-                            print(f"\n[match {i}] Atributos técnicos (resumo):")
-                            for k, v in list(attrs.items())[:40]:
-                                print(f"  - {k}: {v}")
-                    except Exception:
-                        # não bloquear o fluxo se falhar ao imprimir
-                        pass
-                    start = time.time()
-                    poll_interval = 2.0
-                    while True:
-                        try:
-                            pr = requests.get(poll_url, timeout=10)
-                            pr.raise_for_status()
-                            st = pr.json()
-                        except Exception as e:
-                            print(f"[match {i}] Falha ao consultar status do job: {e}")
-                            st = None
-
-                        if st and st.get("status") == "done":
-                            resp = st.get("result")
-                            print(f"\n[match {i}] OK (job {job_id} concluído):")
-                            # same printing logic as before
-                            if isinstance(resp, dict) and ("resultado" in resp or "resultado_llm" in resp):
-                                parsed = resp.get("resultado")
-                                raw = resp.get("resultado_llm")
-                                if parsed is not None:
-                                    print("Resultado estruturado:")
-                                    print(json.dumps(parsed, ensure_ascii=False, indent=2))
-                                else:
-                                    try:
-                                        raw_parsed = json.loads(raw) if isinstance(raw, str) else raw
-                                        print("Resultado (parseado do bruto):")
-                                        print(json.dumps(raw_parsed, ensure_ascii=False, indent=2))
-                                    except Exception:
-                                        print("Resultado bruto:")
-                                        print(raw)
-                            else:
-                                print(json.dumps(resp, ensure_ascii=False, indent=2))
-                            break
-
-                        if st and st.get("status") == "error":
-                            print(f"\n[match {i}] Job {job_id} falhou: {st.get('error')}")
-                            break
-
-                        # timeout global for polling
-                        if not args.no_timeout and (time.time() - start) > args.timeout_match:
-                            print(f"\n[match {i}] Polling do job {job_id} expirou após {args.timeout_match}s")
-                            break
-
-                        time.sleep(poll_interval)
-                        # exponential backoff cap
-                        poll_interval = min(poll_interval * args.backoff, 30)
-                    break
-
-                # otherwise behave like before (synchronous response)
                 r2.raise_for_status()
                 resp = r2.json()
                 print(f"\n[match {i}] OK:")
@@ -611,15 +444,9 @@ def run() -> None:
                         except Exception:
                             print("Resultado bruto:")
                             print(raw)
-                        else:
-                            # Resposta antiga: imprime como veio
-                            print(json.dumps(resp, ensure_ascii=False, indent=2))
-
-                # Mostrar explicações detalhadas (por que cada item recebeu o veredito)
-                try:
-                    _print_match_explanations(resp)
-                except Exception:
-                    pass
+                else:
+                    # Resposta antiga: imprime como veio
+                    print(json.dumps(resp, ensure_ascii=False, indent=2))
                 break
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout,
@@ -627,13 +454,10 @@ def run() -> None:
                 attempt += 1
                 # Tentar obter corpo de resposta para depuração
                 body_text = ""
-                # r2 pode não existir se a requisição falhou antes de obter response
-                r2_local = locals().get('r2', None)
-                if r2_local is not None:
-                    try:
-                        body_text = getattr(r2_local, "text", "") or ""
-                    except Exception:
-                        body_text = ""
+                try:
+                    body_text = r2.text  # r2 pode não existir em timeouts/conexão
+                except Exception:
+                    body_text = ""
                 # Mensagem específica se backend LLM está indisponível
                 if body_text:
                     if "llama" in body_text.lower() or "api/generate" in body_text.lower():

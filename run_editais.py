@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -48,108 +49,89 @@ def _format_kv(key: str, value: Any, pad: int = 26) -> str:
     return f"{k}{value}"
 
 
+def _clean_text(s: str, max_len: int = 420) -> str:
+    t = str(s or "").strip().replace("\r\n", "\n").replace("\r", "\n")
+    t = " ".join(t.split())
+    if len(t) > max_len:
+        t = t[: max_len - 3].rstrip() + "..."
+    return t
+
+
+def _first_sequence_failure(seq: dict) -> str | None:
+    steps = seq.get("steps") if isinstance(seq, dict) else None
+    if not isinstance(steps, list):
+        return None
+    for s in steps:
+        if not isinstance(s, dict):
+            continue
+        if s.get("present") and s.get("status") == "NAO_ATENDE":
+            return str(s.get("requisito"))
+    return None
+
+
 def _print_report(edital_pdf: Path, produto_pdf: Path, result: Dict[str, Any], out_json: Path) -> None:
     score = result.get("score") or {}
-    debug = result.get("debug") or {}
     key_req = (score.get("key_requirements") or {}) if isinstance(score, dict) else {}
     seq = (score.get("sequence_filter") or {}) if isinstance(score, dict) else {}
 
     atende, nao, duv = _summarize_result(result)
 
-    title = f"RESULTADO — {edital_pdf.name}"
-    print("\n" + _hr("=") )
-    print(title)
+    # Cabeçalho compacto
+    print("\n" + _hr("="))
+    print(f"EDITAL: {edital_pdf.name}")
     print(_hr("="))
+    print(_format_kv("Status", score.get("status_geral")))
+    print(_format_kv("Score", f"{score.get('score_percent')}%"))
+    print(_format_kv("Obrigatórios", f"{score.get('obrigatorios_atende')}/{score.get('obrigatorios_total')} atende"))
 
-    print(_format_kv("Edital", _short_path(edital_pdf)))
-    print(_format_kv("Produto", _short_path(produto_pdf)))
-    print(_format_kv("Saída JSON", _short_path(out_json)))
-
-    print(_hr())
-    print(_format_kv("Status geral", score.get("status_geral")))
-    print(_format_kv("Score (%)", score.get("score_percent")))
-    print(
-        _format_kv(
-            "Obrigatórios", f"{score.get('obrigatorios_atende')}/{score.get('obrigatorios_total')} atende"
-        )
-    )
-
-    # Filtro por sequência (se configurado)
+    # Gate por sequência (se configurado)
     if isinstance(seq, dict) and seq.get("configured"):
-        print(_hr())
-        print("Filtro por sequência")
-        print(_format_kv("Configurado", seq.get("configured")))
-        print(_format_kv("Presentes", seq.get("present_in_edital")))
-        print(_format_kv("Final", seq.get("final_status")))
-        print(_format_kv("Override aplicado", seq.get("override_applied")))
-        steps = seq.get("steps") if isinstance(seq.get("steps"), list) else []
-        # mostra no máximo 10 passos para não poluir
-        if steps:
-            preview = []
-            for s in steps[:10]:
-                try:
-                    rk = s.get("requisito")
-                    st = s.get("status")
-                    pr = s.get("present")
-                    preview.append(f"{rk}={'(ausente)'}" if not pr else f"{rk}={st}")
-                except Exception:
-                    continue
-            if preview:
-                print(_format_kv("Passos", ", ".join(preview)))
+        first_fail = _first_sequence_failure(seq)
+        gate_msg = f"final={seq.get('final_status')} override={seq.get('override_applied')}"
+        if first_fail:
+            gate_msg += f" | 1ª falha: {first_fail}"
+        print(_format_kv("Filtro sequência", gate_msg))
 
-    # Requisitos-chave (se configurados)
-    if isinstance(key_req, dict) and (key_req.get("configured") or key_req.get("present_in_edital")):
-        print(_hr())
-        print("Requisitos-chave")
-        print(_format_kv("Configurados", key_req.get("configured")))
-        print(_format_kv("Presentes", key_req.get("present_in_edital")))
-        print(_format_kv("Policy", key_req.get("policy")))
+    # Requisitos-chave (se configurado)
+    if isinstance(key_req, dict) and key_req.get("present_in_edital"):
         print(
             _format_kv(
-                "Contagem",
-                f"{key_req.get('atende')}/{key_req.get('total')} atende, {key_req.get('nao_atende')} não atende, {key_req.get('duvida')} dúvida",
+                "Reqs-chave",
+                f"policy={key_req.get('policy')} {key_req.get('atende')}/{key_req.get('total')} atende (override={key_req.get('override_applied')})",
             )
         )
-        print(_format_kv("Override aplicado", key_req.get("override_applied")))
-        print(_format_kv("Status base", key_req.get("base_status")))
 
-    print(_hr())
-    print(_format_kv("Chunks edital (total)", debug.get("edital_chunks_total")))
-    print(_format_kv("Chunks usados (RAG)", debug.get("edital_chunks_usados")))
-    print(_format_kv("Estratégia extração", debug.get("edital_extract_strategy")))
-    if "fullscan_llm_calls" in debug:
-        print(_format_kv("Fullscan LLM calls", debug.get("fullscan_llm_calls")))
-
-    print(_hr())
-    print(_format_kv("ATENDE", len(atende)))
-    print(_format_kv("NÃO ATENDE", len(nao)))
-    print(_format_kv("DÚVIDA", len(duv)))
+    print(_format_kv("ATENDE/NAO/DÚVIDA", f"{len(atende)}/{len(nao)}/{len(duv)}"))
 
     # Top itens para leitura rápida
-    def _preview(items: List[str], max_n: int = 8) -> str:
+    def _preview(items: List[str], max_n: int = 3) -> str:
         if not items:
             return "(nenhum)"
         head = items[:max_n]
         rest = len(items) - len(head)
         return ", ".join(head) + (f" (+{rest})" if rest > 0 else "")
 
-    print(_hr())
-    print(_format_kv("Exemplos ATENDE", _preview(atende)))
-    print(_format_kv("Exemplos NÃO ATENDE", _preview(nao)))
-    print(_format_kv("Exemplos DÚVIDA", _preview(duv)))
+    print(_format_kv("Exemplos (ATENDE)", _preview(atende)))
+    print(_format_kv("Exemplos (NÃO)", _preview(nao)))
+    print(_format_kv("Exemplos (DÚVIDA)", _preview(duv)))
 
     # Justificativa global
     just = result.get("justificativas") or {}
     global_j = just.get("_global") if isinstance(just, dict) else None
     if global_j:
-        print(_hr())
-        print("Justificativa (global)")
-        print(str(global_j).strip())
+        print(_format_kv("Motivo", _clean_text(global_j)))
 
-    print(_hr("=") )
+    print(_format_kv("Arquivo", _short_path(out_json)))
+    print(_hr("="))
 
 
 def main() -> int:
+    # Melhora encoding no Windows Terminal/PowerShell (evita "nÃ£o" etc.)
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     editais = sorted([p for p in EDITAIS_DIR.glob("*.pdf") if p.is_file()])
     if not editais:
         raise FileNotFoundError(f"Nenhum PDF encontrado em {EDITAIS_DIR}")
@@ -167,13 +149,24 @@ def main() -> int:
     )
 
     print(_hr("="))
-    print("BATCH RUN — MatchLLM")
+    print("MATCHLLM — Execução em lote")
     print(_format_kv("Editais", len(editais)))
     print(_format_kv("Produto", _short_path(produto_pdf)))
-    print(_format_kv("Pasta saída", _short_path(out_dir)))
-    print(_format_kv("LLM_DISABLE", os.getenv("LLM_DISABLE", "0")))
-    print(_format_kv("IMPORTANT_REQUIREMENTS", os.getenv("IMPORTANT_REQUIREMENTS", "")))
-    print(_format_kv("KEY_REQUIREMENTS_POLICY", os.getenv("KEY_REQUIREMENTS_POLICY", "all")))
+    print(_format_kv("Saída", _short_path(out_dir)))
+    print(_format_kv("Modo", "OFFLINE" if os.getenv("LLM_DISABLE", "0") in ("1", "true", "yes") else "COM LLM"))
+    seq_cfg = os.getenv("SEQUENCE_FILTER", "").strip()
+    if seq_cfg:
+        print(_format_kv("SEQUENCE_FILTER", seq_cfg))
+    key_cfg = os.getenv("IMPORTANT_REQUIREMENTS", "").strip()
+    if key_cfg:
+        print(_format_kv("IMPORTANT_REQUIREMENTS", key_cfg))
+        print(_format_kv("KEY_REQUIREMENTS_POLICY", os.getenv("KEY_REQUIREMENTS_POLICY", "all")))
+    tol = os.getenv("MATCH_TOLERANCE_PCT", "").strip()
+    if tol:
+        print(_format_kv("MATCH_TOLERANCE_PCT", tol))
+    tol2 = os.getenv("MATCH_TOLERANCE_OVERRIDES", "").strip()
+    if tol2:
+        print(_format_kv("MATCH_TOLERANCE_OVERRIDES", tol2))
     print(_hr("="))
 
     for edital_pdf in editais:
