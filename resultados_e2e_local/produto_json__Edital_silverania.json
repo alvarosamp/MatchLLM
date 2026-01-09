@@ -1,0 +1,26 @@
+{
+  "nome": null,
+  "tipo_produto": null,
+  "atributos": {
+    "tensao_v": {
+      "valor": 12.0,
+      "unidade": "V"
+    },
+    "corrente_a": {
+      "valor": 2.1,
+      "unidade": "A"
+    },
+    "capacidade_ah": {
+      "valor": 7.0,
+      "unidade": "Ah"
+    },
+    "garantia_meses": {
+      "valor": 12,
+      "unidade": "meses"
+    },
+    "peso_kg": {
+      "valor": 2.1,
+      "unidade": "kg"
+    }
+  }
+}

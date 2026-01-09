@@ -1,0 +1,39 @@
+{
+  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\produtos\\Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\editais\\EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf",
+  "produto_json": {
+    "nome": null,
+    "tipo_produto": null,
+    "atributos": {
+      "corrente_a": {
+        "valor": 2.1,
+        "unidade": "A"
+      }
+    }
+  },
+  "edital_json": {
+    "item": null,
+    "tipo_produto": null,
+    "requisitos": {}
+  },
+  "matching": {},
+  "score": {
+    "score_percent": 0.0,
+    "obrigatorios_total": 0,
+    "obrigatorios_atende": 0,
+    "obrigatorios_nao_atende": 0,
+    "obrigatorios_duvida": 0,
+    "opcionais_total": 0,
+    "opcionais_atende": 0,
+    "opcionais_nao_atende": 0,
+    "opcionais_duvida": 0,
+    "status_geral": "DUVIDOSO"
+  },
+  "justificativas": {
+    "_global": "Nenhum requisito técnico foi extraído do edital; não foi possível justificar o match por item."
+  },
+  "debug": {
+    "edital_chunks_total": 68,
+    "edital_chunks_usados": 10
+  }
+}

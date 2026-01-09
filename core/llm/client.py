@@ -1,154 +1,223 @@
+import requests
 import os
 import time
-import json
-import requests
-from typing import Any, Dict, Optional
+from urllib.parse import urlparse, urlunparse
+import logging
+
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    # Configuração mínima para não quebrar quando não existe logging_config no projeto.
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 
 class LLMClient:
     """
-    Cliente para comunicação com o Ollama.
+    Cliente para comunicação com o LLM rodando via Ollama.
 
-    Padrões:
-    - Timeout configurável via env
-    - Retry simples em timeout
-    - Opções de geração seguras (reduzem travamento)
+    Responsabilidades:
+    - enviar prompt
+    - receber resposta textual do modelo
     """
 
-    def __init__(self, model: Optional[str] = None, base_url: Optional[str] = None):
-        self.base_url = (base_url or os.getenv("LLM_URL", "http://localhost:11434")).rstrip("/")
+    def __init__(self, model: str | None = None, base_url: str | None = None):
+        # Permite sobrescrever via parâmetro; caso contrário usa env vars com defaults
+        self.base_url = base_url or os.getenv("LLM_URL", "http://localhost:11434")
+        # Default alterado para um modelo menor por padrão (reduz RAM exigida)
+        # Ajuste via env: export LLM_MODEL="mistral:7b-instruct-q4_0" ou "llama3:latest"
+        # Usa modelo menor por padrão para reduzir risco de OOM
         self.model = model or os.getenv("LLM_MODEL", "llama3.2:1b")
 
-        # Timeouts
-        # LLM_CONNECT_TIMEOUT: tempo para conectar
-        # LLM_READ_TIMEOUT: tempo esperando resposta (geração)
-        self.connect_timeout = float(os.getenv("LLM_CONNECT_TIMEOUT", "10"))
-        self.read_timeout = float(os.getenv("LLM_READ_TIMEOUT", os.getenv("LLM_TIMEOUT", "120")))
+        # Timeout configurável (segundos). Use 0 para desabilitar timeout.
+        # Ex.: LLM_TIMEOUT_SECONDS=0 (sem timeout) ou LLM_TIMEOUT_SECONDS=600
+        self.timeout = self._get_timeout()
 
-        # Retry em timeout
-        self.retries = int(os.getenv("LLM_RETRIES", "1"))
-        self.backoff = float(os.getenv("LLM_RETRY_BACKOFF", "2"))
-
-        # Logs
-        self.log_prompt = str(os.getenv("LLM_LOG_PROMPT", "0")).lower() in ("1", "true", "yes")
-        self.log_timing = str(os.getenv("LLM_LOG_TIMING", "1")).lower() in ("1", "true", "yes")
-
-    def _default_options(self) -> Dict[str, Any]:
-        # Opções de geração que ajudam a evitar travar
-        # num_predict: limita tokens gerados (importante!)
-        return {
-            "temperature": float(os.getenv("LLM_TEMPERATURE", "0")),
-            "top_p": float(os.getenv("LLM_TOP_P", "1")),
-            "num_ctx": int(os.getenv("LLM_NUM_CTX", "2048")),
-            "num_predict": int(os.getenv("LLM_NUM_PREDICT", "512")),
-        }
-
-    def _load_options(self) -> Dict[str, Any]:
-        options_env = os.getenv("LLM_OPTIONS", "")
-        if options_env:
-            try:
-                parsed = json.loads(options_env)
-                if isinstance(parsed, dict):
-                    return parsed
-            except Exception:
-                pass
-        return self._default_options()
-
-    def list_models(self) -> list[str]:
+    @staticmethod
+    def _get_timeout():
+        raw = os.getenv("LLM_TIMEOUT_SECONDS", "120")
+        raw_s = str(raw or "").strip().lower()
+        if raw_s in ("", "none", "null", "off", "false"):
+            return None
         try:
-            r = requests.get(
-                f"{self.base_url}/api/tags",
-                timeout=(self.connect_timeout, 20),
-            )
-            r.raise_for_status()
-            data = r.json()
-            return [m.get("name") for m in data.get("models", []) if m.get("name")]
+            v = float(raw_s)
         except Exception:
-            return []
+            return 120
+        if v <= 0:
+            return None
+        return v
 
-    def _post_generate(self, payload: Dict[str, Any]) -> str:
-        t0 = time.time()
-        r = requests.post(
-            f"{self.base_url}/api/generate",
-            json=payload,
-            timeout=(self.connect_timeout, self.read_timeout),
-        )
-        if self.log_timing:
-            dt = time.time() - t0
-            print(f"[LLM] status={r.status_code} model={payload.get('model')} dt={dt:.2f}s")
-
-        # Se vier erro HTTP, levanta com body disponível
-        try:
-            r.raise_for_status()
-        except requests.exceptions.HTTPError as he:
-            body = ""
+    def _try_generate(self, base_url: str, payload: dict) -> str:
+        # Retry leve para falhas transitórias (ConnectionRefused durante carga/restart do Ollama).
+        retries = 3
+        delay = 0.75
+        last_exc: Exception | None = None
+        for attempt in range(1, retries + 1):
             try:
-                body = r.text or ""
-            except Exception:
-                pass
-            status = r.status_code
-            snippet = body[:800]
-            raise RuntimeError(f"Erro HTTP do LLM ({status}): {snippet}") from he
-
-        data = r.json()
-        return data.get("response", "")
+                response = requests.post(
+                    f"{base_url}/api/generate",
+                    json=payload,
+                    timeout=self.timeout,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data.get("response", "")
+            except requests.exceptions.ConnectionError as e:
+                last_exc = e
+                if attempt < retries:
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                raise
+        if last_exc:
+            raise last_exc
+        return ""
 
     def generate(self, prompt: str) -> str:
-        options = self._load_options()
+        # Allow overriding Ollama generation options via env var LLM_OPTIONS (JSON)
+        options_env = os.getenv("LLM_OPTIONS", "")
+        options = None
+        if options_env:
+            try:
+                import json as _json
+                options = _json.loads(options_env)
+            except Exception:
+                options = None
 
+        # Default to deterministic, JSON-friendly generation
+        if options is None:
+            try:
+                num_ctx = int(os.getenv("LLM_NUM_CTX", "2048"))
+            except Exception:
+                num_ctx = 2048
+            options = {
+                "temperature": 0,
+                "top_p": 1,
+                # menor contexto por padrão para reduzir uso de memória/V RAM
+                "num_ctx": num_ctx,
+            }
+
+        # JSON enforcement (optional): when enabled, Ollama will enforce JSON output
         force_json = str(os.getenv("LLM_FORCE_JSON", "0")).lower() in ("1", "true", "yes")
 
-        payload: Dict[str, Any] = {
+        payload = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
             "options": options,
         }
+
+        # Optional prompt logging for debugging (enable via env LLM_LOG_PROMPT=1)
+        try:
+            if str(os.getenv("LLM_LOG_PROMPT", "0")).lower() in ("1", "true", "yes"):
+                short = (prompt[:1000] + "...") if isinstance(prompt, str) and len(prompt) > 1000 else prompt
+                logger.debug("LLM_PROMPT model=%s base_url=%s prompt=%s", self.model, self.base_url, short)
+        except Exception:
+            pass
+
         if force_json:
             payload["format"] = "json"
 
-        if self.log_prompt:
-            short = prompt if len(prompt) <= 1500 else (prompt[:1500] + "\n...<truncado>...")
-            print(f"[LLM_PROMPT] base_url={self.base_url} model={self.model}\n{short}\n")
+        try:
+            # Tentativa primária
+            return self._try_generate(self.base_url, payload)
+        except requests.exceptions.ConnectionError as ce:
+            # Fallback automático: tenta localhost/127.0.0.1/ollama
+            fallbacks = [
+                "http://localhost:11434",
+                "http://127.0.0.1:11434",
+                "http://ollama:11434",
+            ]
 
-        attempt = 0
-        last_exc: Optional[Exception] = None
+            tried = [self.base_url]
+            for fb in fallbacks:
+                if fb in tried:
+                    continue
+                try:
+                    result = self._try_generate(fb, payload)
+                    # Atualiza base_url para as próximas chamadas
+                    self.base_url = fb
+                    logger.info("LLM connected via fallback %s", fb)
+                    return result
+                except requests.exceptions.RequestException:
+                    tried.append(fb)
 
-        while attempt <= max(0, self.retries):
-            try:
-                return self._post_generate(payload)
-
-            except requests.exceptions.ReadTimeout as te:
-                last_exc = te
-                attempt += 1
-                if attempt > self.retries:
-                    raise RuntimeError(
-                        f"Timeout do Ollama após {self.read_timeout}s. "
-                        f"Possível prompt grande/modelo lento. "
-                        f"Tente reduzir chunks, reduzir num_ctx/num_predict ou usar modelo menor."
-                    ) from te
-                time.sleep(self.backoff ** attempt)
-
-            except requests.exceptions.ConnectionError as ce:
-                last_exc = ce
+            logger.exception("Falha ao conectar ao LLM. Tentativas: %s", tried)
+            raise RuntimeError(
+                f"Não foi possível conectar ao LLM. Tentativas: {', '.join(tried)}. Verifique se o Ollama está em execução."
+            ) from ce
+        except requests.exceptions.HTTPError as he:
+            # Se o modelo não for encontrado (404), tenta fallback para um modelo disponível
+            status = getattr(he.response, "status_code", None) if hasattr(he, "response") else None
+            body = he.response.text if hasattr(he, "response") and he.response is not None else ""
+            if status == 404 and "model" in body and "not found" in body.lower():
+                available = self.list_models()
+                if available:
+                    # escolhe o primeiro disponível
+                    fallback = available[0]
+                    try:
+                        logger.info("Attempting fallback model %s due to 404", fallback)
+                        response2 = requests.post(
+                            f"{self.base_url}/api/generate",
+                            json={"model": fallback, "prompt": prompt, "stream": False},
+                            timeout=self.timeout,
+                        )
+                        response2.raise_for_status()
+                        data2 = response2.json()
+                        return data2.get("response", "")
+                    except Exception as e2:
+                        logger.exception("Fallback model %s failed", fallback)
+                        raise RuntimeError(
+                            f"Modelo padrão '{self.model}' indisponível e fallback '{fallback}' falhou: {e2}"
+                        ) from e2
                 raise RuntimeError(
-                    f"Não foi possível conectar ao Ollama em {self.base_url}. "
-                    f"Verifique se o Ollama está rodando e a porta 11434 está aberta."
-                ) from ce
+                    f"Modelo '{self.model}' não encontrado e nenhum modelo disponível no Ollama."
+                )
+            # Falha por falta de memória GPU: tenta automaticamente um modelo menor (ex.: 1b)
+            if status == 500 and ("unable to allocate" in body.lower() or "cuda" in body.lower()):
+                available = self.list_models()
+                if available:
+                    # Heurística simples: preferir nomes contendo '1b'
+                    fallback = None
+                    for name in available:
+                        if "1b" in (name or "").lower():
+                            fallback = name
+                            break
+                    if not fallback:
+                        fallback = available[0]
+                    try:
+                        logger.warning("OOM detected for model %s, trying fallback %s", self.model, fallback)
+                        payload2 = dict(payload)
+                        payload2["model"] = fallback
+                        data2 = self._try_generate(self.base_url, payload2)
+                        # Atualiza o modelo padrao do cliente para próximas chamadas
+                        self.model = fallback
+                        return data2
+                    except Exception as e2:
+                        logger.exception("Fallback after OOM failed")
+                        raise RuntimeError(
+                            f"Modelo configurado '{self.model}' causou OOM; fallback '{fallback}' também falhou: {e2}"
+                        ) from e2
+            # Inclui parte do corpo para facilitar diagnóstico
+            snippet = body[:500]
+            logger.error("HTTP error from LLM (%s): %s", status, snippet)
+            raise RuntimeError(
+                f"Erro HTTP do LLM ({status}): {snippet}"
+            ) from he
+        except requests.exceptions.Timeout as te:
+            logger.exception("Timeout ao gerar resposta do LLM")
+            raise RuntimeError("Tempo de espera excedido ao gerar resposta do LLM.") from te
 
-            except requests.exceptions.Timeout as te:
-                last_exc = te
-                raise RuntimeError(
-                    f"Timeout genérico do Ollama (connect/read). connect={self.connect_timeout}s read={self.read_timeout}s."
-                ) from te
+    def list_models(self) -> list:
+        """Lista modelos disponíveis no Ollama."""
+        try:
+            r = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            # Ollama tags: {"models": [{"name": "llama3.1"}, ...]}
+            return [m.get("name") for m in data.get("models", [])]
+        except Exception:
+            logger.debug("Unable to list models at %s", self.base_url)
+            return []
 
-            except RuntimeError:
-                # Já vem com mensagem boa (erro HTTP do LLM)
-                raise
-
-            except Exception as e:
-                last_exc = e
-                raise RuntimeError(f"Falha inesperada ao chamar o LLM: {e}") from e
-
-        # fallback (não deveria chegar aqui)
-        raise RuntimeError(f"Falha ao gerar resposta do LLM: {last_exc}")
+if __name__ == "__main__":
+    llm = LLMClient()
+    print(llm.generate("Explique o que é uma licitação em uma frase."))

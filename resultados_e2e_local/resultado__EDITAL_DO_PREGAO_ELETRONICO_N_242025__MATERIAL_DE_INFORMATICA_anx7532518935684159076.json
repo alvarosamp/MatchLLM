@@ -108,7 +108,7 @@
     "opcionais_atende": 0,
     "opcionais_nao_atende": 0,
     "opcionais_duvida": 0,
-    "status_geral": "APROVADO",
+    "status_geral": "REPROVADO",
     "key_requirements": {
       "configured": [
         "tensao_v"
@@ -123,6 +123,25 @@
       "duvida": 0,
       "override_applied": true,
       "base_status": "REPROVADO"
+    },
+    "sequence_filter": {
+      "configured": [
+        "corrente_a",
+        "capacidade_ah",
+        "tensao_v"
+      ],
+      "present_in_edital": [
+        "corrente_a"
+      ],
+      "steps": [
+        {
+          "requisito": "corrente_a",
+          "present": true,
+          "status": "NAO_ATENDE"
+        }
+      ],
+      "final_status": "REPROVADO",
+      "override_applied": true
     }
   },
   "justificativas": {
@@ -135,7 +154,7 @@
     "portas": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8).",
     "velocidade_gbps": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8.0 Gbps).",
     "memoria_ram_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8.0 GB).",
-    "_global": "Status geral: APROVADO. Score: 22.22%. Requisitos-chave (policy=any): 1/1 atende, 0 não atende, 0 dúvida. Presentes: ['tensao_v']."
+    "_global": "Status geral: REPROVADO. Score: 22.22%. Filtro por sequência: final=REPROVADO, override=True. Presentes: ['corrente_a']. Requisitos-chave (policy=any): 1/1 atende, 0 não atende, 0 dúvida. Presentes: ['tensao_v']."
   },
   "debug": {
     "ocr_edital": {

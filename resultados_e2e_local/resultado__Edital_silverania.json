@@ -1,0 +1,186 @@
+{
+  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\produtos\\Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\editais\\Edital_silverania.pdf",
+  "produto_json": {
+    "nome": null,
+    "tipo_produto": null,
+    "atributos": {
+      "tensao_v": {
+        "valor": 12.0,
+        "unidade": "V"
+      },
+      "corrente_a": {
+        "valor": 2.1,
+        "unidade": "A"
+      },
+      "capacidade_ah": {
+        "valor": 7.0,
+        "unidade": "Ah"
+      },
+      "garantia_meses": {
+        "valor": 12,
+        "unidade": "meses"
+      },
+      "peso_kg": {
+        "valor": 2.1,
+        "unidade": "kg"
+      }
+    }
+  },
+  "edital_json": {
+    "item": null,
+    "tipo_produto": null,
+    "requisitos": {
+      "corrente_a": {
+        "valor_min": 1.0,
+        "valor_max": 1.0,
+        "unidade": "A",
+        "obrigatorio": true
+      },
+      "tensao_v": {
+        "valor_min": 110.0,
+        "valor_max": null,
+        "unidade": "V",
+        "obrigatorio": true
+      },
+      "portas": {
+        "valor_min": 3,
+        "valor_max": 3,
+        "unidade": null,
+        "obrigatorio": true
+      },
+      "velocidade_gbps": {
+        "valor_min": 1.65,
+        "valor_max": 1.65,
+        "unidade": "Gbps",
+        "obrigatorio": true
+      },
+      "garantia_meses": {
+        "valor_min": 12,
+        "valor_max": null,
+        "unidade": "meses",
+        "obrigatorio": true
+      },
+      "potencia_w": {
+        "valor_min": 20.0,
+        "valor_max": 20.0,
+        "unidade": "W",
+        "obrigatorio": true
+      },
+      "memoria_ram_gb": {
+        "valor_min": 6.0,
+        "valor_max": 6.0,
+        "unidade": "GB",
+        "obrigatorio": true
+      },
+      "armazenamento_gb": {
+        "valor_min": 64.0,
+        "valor_max": null,
+        "unidade": "GB",
+        "obrigatorio": true
+      }
+    }
+  },
+  "matching": {
+    "corrente_a": "NAO_ATENDE",
+    "tensao_v": "NAO_ATENDE",
+    "portas": "NAO_ATENDE",
+    "velocidade_gbps": "NAO_ATENDE",
+    "garantia_meses": "ATENDE",
+    "potencia_w": "NAO_ATENDE",
+    "memoria_ram_gb": "NAO_ATENDE",
+    "armazenamento_gb": "NAO_ATENDE"
+  },
+  "score": {
+    "score_percent": 12.5,
+    "obrigatorios_total": 8,
+    "obrigatorios_atende": 1,
+    "obrigatorios_nao_atende": 7,
+    "obrigatorios_duvida": 0,
+    "opcionais_total": 0,
+    "opcionais_atende": 0,
+    "opcionais_nao_atende": 0,
+    "opcionais_duvida": 0,
+    "status_geral": "REPROVADO",
+    "key_requirements": {
+      "configured": [
+        "tensao_v"
+      ],
+      "present_in_edital": [
+        "tensao_v"
+      ],
+      "policy": "any",
+      "total": 1,
+      "atende": 0,
+      "nao_atende": 1,
+      "duvida": 0,
+      "override_applied": true,
+      "base_status": "REPROVADO"
+    },
+    "sequence_filter": {
+      "configured": [
+        "corrente_a",
+        "capacidade_ah",
+        "tensao_v"
+      ],
+      "present_in_edital": [
+        "corrente_a"
+      ],
+      "steps": [
+        {
+          "requisito": "corrente_a",
+          "present": true,
+          "status": "NAO_ATENDE"
+        }
+      ],
+      "final_status": "REPROVADO",
+      "override_applied": true
+    }
+  },
+  "justificativas": {
+    "corrente_a": "NAO_ATENDE pela comparação (esperado = 1.0 A; observado: 2.1 A).",
+    "tensao_v": "NAO_ATENDE pela comparação (esperado >= 110.0 V; observado: 12.0 V).",
+    "portas": "NAO_ATENDE porque o produto não informou este atributo (esperado = 3).",
+    "velocidade_gbps": "NAO_ATENDE porque o produto não informou este atributo (esperado = 1.65 Gbps).",
+    "garantia_meses": "ATENDE pela regra de comparação (esperado >= 12 meses; observado: 12 meses).",
+    "potencia_w": "NAO_ATENDE porque o produto não informou este atributo (esperado = 20.0 W).",
+    "memoria_ram_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado = 6.0 GB).",
+    "armazenamento_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado >= 64.0 GB).",
+    "_global": "Status geral: REPROVADO. Score: 12.5%. Filtro por sequência: final=REPROVADO, override=True. Presentes: ['corrente_a']. Requisitos-chave (policy=any): 0/1 atende, 1 não atende, 0 dúvida. Presentes: ['tensao_v']."
+  },
+  "debug": {
+    "ocr_edital": {
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\editais\\Edital_silverania.pdf",
+      "method": "native",
+      "used_gemini": false,
+      "native_text": true,
+      "errors": [],
+      "native_quality": {
+        "chars": 183744,
+        "words": 27828,
+        "alnum_ratio": 0.8005649164054337
+      }
+    },
+    "ocr_produto": {
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\produtos\\Produto36334IdArquivo15589.pdf",
+      "method": "native",
+      "used_gemini": false,
+      "native_text": true,
+      "errors": [],
+      "native_quality": {
+        "chars": 1553,
+        "words": 237,
+        "alnum_ratio": 0.7875080489375402
+      }
+    },
+    "edital_chunks_total": 74,
+    "edital_chunks_usados": 10,
+    "edital_extract_strategy": "fullscan",
+    "fullscan_chunks_total": 136,
+    "fullscan_chunks_usados": 136,
+    "fullscan_llm_calls": 23,
+    "fullscan_chunk_max_tokens": 220,
+    "fullscan_window_chunks": 6,
+    "fullscan_stride_chunks": 6
+  }
+}
