@@ -1,0 +1,159 @@
+{
+  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_004415__Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_004415__Edital_silverania.pdf",
+  "produto_json": {
+    "nome": null,
+    "tipo_produto": null,
+    "atributos": {
+      "tensao_v": {
+        "valor": 12.0,
+        "unidade": "V"
+      },
+      "corrente_a": {
+        "valor": 2.1,
+        "unidade": "A"
+      },
+      "capacidade_ah": {
+        "valor": 7.0,
+        "unidade": "Ah"
+      },
+      "peso_kg": {
+        "valor": 2.1,
+        "unidade": "kg"
+      }
+    }
+  },
+  "edital_json": {
+    "item": null,
+    "tipo_produto": null,
+    "requisitos": {
+      "garantia_meses": {
+        "valor_min": 12,
+        "valor_max": null,
+        "unidade": "meses",
+        "obrigatorio": true
+      },
+      "tensao_v": {
+        "valor_min": 250.0,
+        "valor_max": null,
+        "unidade": "V",
+        "obrigatorio": true
+      }
+    },
+    "_meta": {
+      "llm_unparseable": true
+    }
+  },
+  "matching": {
+    "garantia_meses": "NAO_ATENDE",
+    "tensao_v": "NAO_ATENDE"
+  },
+  "score": {
+    "score_percent": 0.0,
+    "obrigatorios_total": 2,
+    "obrigatorios_atende": 0,
+    "obrigatorios_nao_atende": 2,
+    "obrigatorios_duvida": 0,
+    "opcionais_total": 0,
+    "opcionais_atende": 0,
+    "opcionais_nao_atende": 0,
+    "opcionais_duvida": 0,
+    "status_geral": "REPROVADO",
+    "key_requirements": {
+      "configured": [],
+      "present_in_edital": [],
+      "policy": "all",
+      "total": 0,
+      "atende": 0,
+      "nao_atende": 0,
+      "duvida": 0,
+      "override_applied": false,
+      "base_status": "REPROVADO"
+    },
+    "sequence_filter": {
+      "configured": [],
+      "present_in_edital": [],
+      "steps": [],
+      "final_status": null,
+      "override_applied": false
+    }
+  },
+  "justificativas": {
+    "garantia_meses": "Faltou justificar a garantia meses",
+    "tensao_v": "O valor do tensão V não foi fornecido",
+    "_global": "O status final de uma comparação de produto vs edital é determinado pela presença ou ausência de requisitos-chave específicos que não estejam incluídos no edital. Se os requisitos-chave necessários para a comparação não estão mencionados, o status geral será \"REPROVADO\"."
+  },
+  "debug": {
+    "ocr_edital": {
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_004415__Edital_silverania.pdf",
+      "method": "gemini_forced",
+      "used_gemini": true,
+      "native_text": false,
+      "errors": []
+    },
+    "ocr_produto": {
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_000231__Produto36334IdArquivo15589.pdf",
+      "method": "gemini_forced",
+      "used_gemini": true,
+      "native_text": false,
+      "errors": []
+    },
+    "cache": {
+      "hit": false,
+      "produto": true,
+      "edital": false,
+      "hint_key": "generic|v2"
+    },
+    "edital_chunks_usados": 10,
+    "edital_extract_strategy": "rag_then_full"
+  },
+  "cliente": {
+    "status_geral": "REPROVADO",
+    "score_percent": 0.0,
+    "obrigatorios_atende": 0,
+    "obrigatorios_total": 2,
+    "obrigatorios_nao_atende": 2,
+    "obrigatorios_duvida": 0,
+    "principais": [],
+    "atende": [],
+    "nao_atende": [
+      "garantia_meses",
+      "tensao_v"
+    ],
+    "duvida": [],
+    "itens": [
+      {
+        "chave": "garantia_meses",
+        "status": "NAO_ATENDE",
+        "obrigatorio": true,
+        "requisito": {
+          "valor": null,
+          "valor_min": 12,
+          "valor_max": null,
+          "unidade": "meses"
+        },
+        "produto": {
+          "valor": null,
+          "unidade": null
+        },
+        "justificativa": "Faltou justificar a garantia meses"
+      },
+      {
+        "chave": "tensao_v",
+        "status": "NAO_ATENDE",
+        "obrigatorio": true,
+        "requisito": {
+          "valor": null,
+          "valor_min": 250.0,
+          "valor_max": null,
+          "unidade": "V"
+        },
+        "produto": {
+          "valor": 12.0,
+          "unidade": "V"
+        },
+        "justificativa": "O valor do tensão V não foi fornecido"
+      }
+    ]
+  }
+}

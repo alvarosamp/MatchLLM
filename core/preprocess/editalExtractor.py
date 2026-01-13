@@ -197,10 +197,68 @@ class EditalExtractor:
         return None
 
     def extract(self, edital_text: str, produto_hint: str | None = None) -> Dict[str, Any]:
+        def _focus_text_for_hint(text: str, hint: str | None) -> str:
+            """Reduz o texto para trechos/linhas que mencionam o produto.
+
+            Ajuda especialmente no fallback heurístico: evita capturar números
+            de itens não relacionados (ex.: requisitos de informática quando o
+            produto é bateria).
+            """
+            try:
+                h = (hint or "").strip().lower()
+                if not h:
+                    return text
+
+                def _is_battery(hh: str) -> bool:
+                    return any(w in hh for w in ("bateria", "no-break", "nobreak", "vrla", "agm", "ah"))
+
+                if not _is_battery(h):
+                    return text
+
+                keywords = ("bateria", "no-break", "nobreak", "vrla", "agm", "ah", "wp")
+                lines = (text or "").splitlines()
+                keep: set[int] = set()
+                for i, line in enumerate(lines):
+                    ll = (line or "").lower()
+                    if any(k in ll for k in keywords):
+                        keep.add(i)
+                        # specs frequentemente vêm logo abaixo
+                        keep.add(i + 1)
+                        keep.add(i + 2)
+                kept_lines = [lines[i] for i in sorted(keep) if 0 <= i < len(lines)]
+                focused = "\n".join([ln for ln in kept_lines if ln and ln.strip()]).strip()
+                return focused or text
+            except Exception:
+                return text
+
         # Se o LLM já falhou anteriormente (timeout/conexão) ou foi desabilitado,
         # usa heurística para manter o pipeline funcional.
         if self._llm_disabled or self._llm_unavailable:
-            out = self._heuristic_extract(edital_text)
+            out = self._heuristic_extract(_focus_text_for_hint(edital_text, produto_hint))
+
+            # Filtra requisitos heurísticos por tipo quando possível.
+            try:
+                hint = (produto_hint or "").strip().lower()
+                if hint:
+                    def _is_battery(h: str) -> bool:
+                        return any(w in h for w in ("bateria", "no-break", "nobreak", "vrla", "agm", "ah"))
+
+                    if _is_battery(hint):
+                        allowed = {
+                            "tensao_v",
+                            "capacidade_ah",
+                            "garantia_meses",
+                            "peso_kg",
+                            "comprimento_mm",
+                            "largura_mm",
+                            "altura_mm",
+                        }
+                        reqs = out.get("requisitos") if isinstance(out, dict) else None
+                        if isinstance(reqs, dict) and reqs:
+                            out["requisitos"] = {k: v for k, v in reqs.items() if k in allowed}
+            except Exception:
+                pass
+
             try:
                 out["_meta"] = {"llm_skipped": True}
             except Exception:
@@ -240,6 +298,24 @@ class EditalExtractor:
                 pass
             return out
 
+        def _to_num(v):
+            if v is None:
+                return None
+            if isinstance(v, (int, float)):
+                return float(v)
+            if isinstance(v, str):
+                s = v.strip()
+                if not s:
+                    return None
+                # aceita formatos PT-BR e EN ("1.234,56" / "1234.56")
+                try:
+                    if "," in s and "." in s:
+                        return float(s.replace(".", "").replace(",", "."))
+                    return float(s.replace(",", "."))
+                except Exception:
+                    return None
+            return None
+
         def _sanitize(data: Dict[str, Any]) -> Dict[str, Any]:
             item = data.get("item")
             tipo = data.get("tipo_produto")
@@ -260,18 +336,64 @@ class EditalExtractor:
                     continue
                 if not isinstance(regra, dict):
                     continue
+
+                vmin = _to_num(regra.get("valor_min", None))
+                vmax = _to_num(regra.get("valor_max", None))
+                # Requisito mensurável precisa ter pelo menos um número
+                if vmin is None and vmax is None:
+                    continue
+
+                unidade = regra.get("unidade", None)
+                if not isinstance(unidade, str) or not unidade.strip():
+                    unidade = None
                 cleaned[kk] = {
-                    "valor_min": regra.get("valor_min", None),
-                    "valor_max": regra.get("valor_max", None),
-                    "unidade": regra.get("unidade", None),
+                    "valor_min": vmin,
+                    "valor_max": vmax,
+                    "unidade": unidade,
                     "obrigatorio": bool(regra.get("obrigatorio", True)),
                 }
 
-            return {
+            out = {
                 "item": item if isinstance(item, str) and item.strip() else None,
                 "tipo_produto": tipo.strip() if isinstance(tipo, str) and tipo.strip() else None,
                 "requisitos": cleaned,
             }
+
+            # Se o LLM não trouxe nada mensurável, cai para heurística determinística
+            if not out.get("requisitos"):
+                heur = self._heuristic_extract(_focus_text_for_hint(edital_text, produto_hint))
+
+                # Heurística pode capturar números de outros itens; filtra por tipo quando possível.
+                try:
+                    hint = (produto_hint or "").strip().lower()
+                    if hint:
+                        def _is_battery(h: str) -> bool:
+                            return any(w in h for w in ("bateria", "no-break", "nobreak", "vrla", "agm", "ah"))
+
+                        if _is_battery(hint):
+                            allowed = {
+                                "tensao_v",
+                                "capacidade_ah",
+                                "garantia_meses",
+                                "peso_kg",
+                                "comprimento_mm",
+                                "largura_mm",
+                                "altura_mm",
+                            }
+                            reqs = heur.get("requisitos") if isinstance(heur, dict) else None
+                            if isinstance(reqs, dict) and reqs:
+                                heur["requisitos"] = {k: v for k, v in reqs.items() if k in allowed}
+                except Exception:
+                    pass
+
+                try:
+                    heur.setdefault("_meta", {})
+                    heur["_meta"].update({"llm_empty": True})
+                except Exception:
+                    pass
+                return heur
+
+            return out
 
         if isinstance(response, dict):
             return _sanitize(response)
@@ -281,8 +403,35 @@ class EditalExtractor:
             if parsed:
                 return _sanitize(parsed)
 
-        return {
-            "item": None,
-            "tipo_produto": None,
-            "requisitos": {}
-        }
+        # Se o LLM respondeu algo não parseável, evita retornar {} quando há specs óbvias.
+        out = self._heuristic_extract(_focus_text_for_hint(edital_text, produto_hint))
+
+        # Mesmo filtro do caso llm_empty
+        try:
+            hint = (produto_hint or "").strip().lower()
+            if hint:
+                def _is_battery(h: str) -> bool:
+                    return any(w in h for w in ("bateria", "no-break", "nobreak", "vrla", "agm", "ah"))
+
+                if _is_battery(hint):
+                    allowed = {
+                        "tensao_v",
+                        "capacidade_ah",
+                        "garantia_meses",
+                        "peso_kg",
+                        "comprimento_mm",
+                        "largura_mm",
+                        "altura_mm",
+                    }
+                    reqs = out.get("requisitos") if isinstance(out, dict) else None
+                    if isinstance(reqs, dict) and reqs:
+                        out["requisitos"] = {k: v for k, v in reqs.items() if k in allowed}
+        except Exception:
+            pass
+
+        try:
+            out.setdefault("_meta", {})
+            out["_meta"].update({"llm_unparseable": True})
+        except Exception:
+            pass
+        return out

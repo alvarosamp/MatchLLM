@@ -429,14 +429,109 @@ class MatchPipeline:
             cur["obrigatorio"] = bool(cur.get("obrigatorio", True)) or bool(rule.get("obrigatorio", True))
 
         edital_json["requisitos"] = cleaned
+
+        # Se o produto for bateria/no-break, mantém somente requisitos comparáveis e relevantes.
+        try:
+            if self._is_battery_product(produto_json):
+                # Para baterias/no-break, por padrão consideramos somente o essencial:
+                # tensão e capacidade (ex.: 12V / 7Ah).
+                # Se quiser mudar (ex.: só tensão), use:
+                #   BATTERY_ALLOWED_REQUIREMENTS=tensao_v
+                allowed_cfg = str(os.getenv("BATTERY_ALLOWED_REQUIREMENTS", "tensao_v,capacidade_ah") or "tensao_v,capacidade_ah").strip()
+                allowed_cfg = allowed_cfg.replace(";", ",")
+                allowed = {p.strip() for p in allowed_cfg.split(",") if p.strip()}
+                if not allowed:
+                    allowed = {"tensao_v"}
+                edital_json["requisitos"] = {k: v for k, v in cleaned.items() if k in allowed}
+        except Exception:
+            pass
         return edital_json
+
+    def _is_battery_product(self, produto_json: Dict[str, Any]) -> bool:
+        try:
+            nome = str((produto_json or {}).get("nome") or "").strip().lower()
+            tipo = str((produto_json or {}).get("tipo_produto") or "").strip().lower()
+            attrs = (produto_json or {}).get("atributos")
+            if not isinstance(attrs, dict):
+                attrs = {}
+            if any(w in (nome + " " + tipo) for w in ("bateria", "no-break", "nobreak", "vrla", "agm")):
+                return True
+            # indícios técnicos
+            if "capacidade_ah" in attrs or "capacidade_nominal" in attrs:
+                return True
+        except Exception:
+            return False
+        return False
+
+    def _postprocess_produto_json(self, produto_json: Dict[str, Any]) -> Dict[str, Any]:
+        """Normaliza chaves do produto para casar com requisitos canônicos do edital."""
+        if not isinstance(produto_json, dict):
+            return {"nome": None, "tipo_produto": None, "atributos": {}}
+
+        attrs = produto_json.get("atributos")
+        if not isinstance(attrs, dict):
+            attrs = {}
+
+        import re
+        try:
+            import unicodedata
+        except Exception:
+            unicodedata = None
+
+        def _canon(s: str) -> str:
+            s = (s or "").strip().lower()
+            if unicodedata:
+                s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+            s = re.sub(r"[^a-z0-9]+", "_", s)
+            s = re.sub(r"_+", "_", s).strip("_")
+            return s
+
+        synonym_map = {
+            "tensao": "tensao_v",
+            "voltagem": "tensao_v",
+            "tensao_nominal": "tensao_v",
+            "tensao_v": "tensao_v",
+            "capacidade": "capacidade_ah",
+            "capacidade_bateria": "capacidade_ah",
+            "capacidade_nominal": "capacidade_ah",
+            "capacidade_ah": "capacidade_ah",
+            "peso": "peso_kg",
+            "peso_kg": "peso_kg",
+            "comprimento": "comprimento_mm",
+            "comprimento_mm": "comprimento_mm",
+            "largura": "largura_mm",
+            "largura_mm": "largura_mm",
+            "altura": "altura_mm",
+            "altura_mm": "altura_mm",
+            "garantia": "garantia_meses",
+            "garantia_meses": "garantia_meses",
+        }
+
+        cleaned: Dict[str, Any] = {}
+        for k, v in attrs.items():
+            if not isinstance(k, str) or not k.strip():
+                continue
+            kk = synonym_map.get(_canon(k), _canon(k))
+
+            if isinstance(v, dict) and ("valor" in v or "unidade" in v):
+                cleaned[kk] = {"valor": v.get("valor", None), "unidade": v.get("unidade", None)}
+            else:
+                cleaned[kk] = {"valor": v, "unidade": None}
+
+        produto_json = {
+            **produto_json,
+            "nome": produto_json.get("nome") if isinstance(produto_json.get("nome"), str) and str(produto_json.get("nome")).strip() else None,
+            "tipo_produto": produto_json.get("tipo_produto") if isinstance(produto_json.get("tipo_produto"), str) and str(produto_json.get("tipo_produto")).strip() else None,
+            "atributos": cleaned,
+        }
+        return produto_json
 
     def run(self, edital_pdf_path: str, produto_pdf_path: str) -> Dict[str, Any]:
         # 1) OCR
-        edital_text_raw = self.pdf.extract(edital_pdf_path)
+        edital_text_raw = self.pdf.extract(edital_pdf_path, log_label="edital")
         ocr_meta_edital = getattr(self.pdf, "last_meta", None)
 
-        produto_text_raw = self.pdf.extract(produto_pdf_path)
+        produto_text_raw = self.pdf.extract(produto_pdf_path, log_label="produto")
         ocr_meta_produto = getattr(self.pdf, "last_meta", None)
 
         # 2) Normalização
@@ -461,7 +556,7 @@ class MatchPipeline:
                 pass
 
         # 3) Extrai produto (LLM)
-        produto_json = self.product_extractor.extract(produto_text)
+        produto_json = self._postprocess_produto_json(self.product_extractor.extract(produto_text))
 
         produto_hint = (produto_json.get("tipo_produto") or "") + " " + (produto_json.get("nome") or "")
         produto_hint = produto_hint.strip()
@@ -517,7 +612,8 @@ class MatchPipeline:
         edital_json = self._postprocess_edital_json(edital_json, produto_json)
 
         # 6) Matching determinístico
-        matching = self.engine.compare(produto_json, edital_json)
+        tol_overrides = {"capacidade_ah": 0.25} if self._is_battery_product(produto_json) else None
+        matching = self.engine.compare(produto_json, edital_json, tolerance_overrides=tol_overrides)
 
         # 7) Score final
         score = compute_score(matching, edital_json)
@@ -551,6 +647,51 @@ class MatchPipeline:
                 "edital_extract_strategy": extract_strategy,
                 **(fullscan_debug or {}),
             },
+        }
+
+    def run_with_extracted(
+        self,
+        *,
+        edital_json: Dict[str, Any],
+        produto_json: Dict[str, Any],
+        edital_pdf_path: str | None = None,
+        produto_pdf_path: str | None = None,
+        debug: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        """Executa apenas as etapas determinísticas (matching/score) e justificativas.
+
+        Útil para cache em banco: reaproveita `produto_json` e `edital_json` já extraídos.
+        """
+        produto_json = self._postprocess_produto_json(produto_json)
+        edital_json = self._postprocess_edital_json(edital_json, produto_json)
+        tol_overrides = {"capacidade_ah": 0.25} if self._is_battery_product(produto_json) else None
+        matching = self.engine.compare(produto_json, edital_json, tolerance_overrides=tol_overrides)
+        score = compute_score(matching, edital_json)
+
+        justificativas = {"justificativas": {}}
+        if self.enable_justification and self.justifier and matching:
+            justificativas = self.justifier.generate(
+                produto_json=produto_json,
+                edital_json=edital_json,
+                matching=matching,
+                score=score,
+            )
+        elif self.enable_justification:
+            justificativas = {
+                "justificativas": {
+                    "_global": "Nenhum requisito técnico foi extraído do edital; não foi possível justificar o match por item."
+                }
+            }
+
+        return {
+            "produto_pdf": produto_pdf_path,
+            "edital_pdf": edital_pdf_path,
+            "produto_json": produto_json,
+            "edital_json": edital_json,
+            "matching": matching,
+            "score": score,
+            "justificativas": justificativas.get("justificativas", {}),
+            "debug": debug or {},
         }
 
     @staticmethod

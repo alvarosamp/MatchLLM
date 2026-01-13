@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 import traceback
 import json
 from typing import List, Optional
@@ -13,8 +13,15 @@ from api.services.edital_service import (
 
 router = APIRouter(prefix="/editais", tags=["Editais"])
 
+from sqlalchemy.orm import Session
+
+from db.session import SessionLocal, init_db
+from db.repositories.produto_repo import get_or_create
+from db.repositories.match_repo import create_match
+
 
 from pydantic import BaseModel
+from core.utils.emailer import is_valid_email, send_email
 
 
 class MatchMultipleRequest(BaseModel):
@@ -23,6 +30,15 @@ class MatchMultipleRequest(BaseModel):
     consulta: str
     model: Optional[str] = None
     use_requisitos: bool = False
+    email: Optional[str] = None
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def _summarize_technical(items: list[dict]) -> str:
@@ -132,13 +148,14 @@ def _normalize_match_item(item: dict) -> dict:
     return it
 
 @router.post("/upload")
-async def upload_edital(file: UploadFile = File(...)):
+async def upload_edital(file: UploadFile = File(...), db: Session = Depends(get_db)):
     filename = (file.filename or "")
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Envie um arquivo PDF.")
 
     try:
-        result = processar_edital(file.file)
+        init_db()
+        result = processar_edital(file.file, filename=filename, db=db)
         return {
             "message": "Edital processado com sucesso.",
             "edital_id": result.get("edital_id"),
@@ -157,12 +174,23 @@ async def match_edital(
     consulta: str,
     model: str | None = None,
     use_requisitos: bool = False,
+    email: str | None = None,
+    db: Session = Depends(get_db),
 ):
     """
     produto: JSON com informações técnicas
     consulta: string usada para buscar trechos relevantes (ex: "switch 24 portas poe")
     """
     try:
+        init_db()
+
+        # Persiste (ou atualiza) o produto para termos produto_id no match
+        prod_rec = None
+        try:
+            prod_rec = get_or_create(db, nome=produto.nome, atributos_json=produto.atributos)
+        except Exception:
+            prod_rec = None
+
         if use_requisitos:
             # Tenta usar requisitos previamente extraídos; se não houver, tenta extrair primeiro
             try:
@@ -170,7 +198,47 @@ async def match_edital(
             except FileNotFoundError:
                 _ = extrair_requisitos(edital_id, model=model)
                 itens = rodar_match_com_requisitos(produto, edital_id, model=model)
-            return {"edital_id": edital_id, "resultado": itens}
+
+            # Persiste match com resultado estruturado
+            try:
+                create_match(
+                    db,
+                    edital_id=edital_id,
+                    produto_id=int(prod_rec.id) if prod_rec else None,
+                    consulta=consulta,
+                    resultado_llm={"resultado": itens, "modo": "requisitos"},
+                )
+            except Exception:
+                pass
+            response = {"edital_id": edital_id, "resultado": itens}
+            email_sent = False
+            email_error = None
+            if email:
+                if not is_valid_email(email):
+                    email_error = "Email inválido"
+                else:
+                    try:
+                        send_email(
+                            to_email=email,
+                            subject=f"MatchLLM - Resultado do match (edital_id={edital_id})",
+                            body_text=(
+                                f"Resultado do match para edital_id={edital_id}.\n"
+                                f"Consulta: {consulta}\n\n"
+                                f"O resultado estruturado está anexado como JSON."
+                            ),
+                            attachments=[(
+                                f"match_edital_{edital_id}.json",
+                                json.dumps(response, ensure_ascii=False, indent=2).encode("utf-8"),
+                                "application/json",
+                            )],
+                        )
+                        email_sent = True
+                    except Exception as e:
+                        email_error = str(e)
+            response["email_sent"] = email_sent
+            if email_error:
+                response["email_error"] = email_error
+            return response
         else:
             result = rodar_match(produto, edital_id, consulta, model=model)
 
@@ -201,7 +269,47 @@ async def match_edital(
             if isinstance(result_json, list):
                 result_json = [_normalize_match_item(it) for it in result_json]
 
-            return {"edital_id": edital_id, "resultado_llm": result, "resultado": result_json}
+            # Persiste match (raw + normalizado)
+            try:
+                create_match(
+                    db,
+                    edital_id=edital_id,
+                    produto_id=int(prod_rec.id) if prod_rec else None,
+                    consulta=consulta,
+                    resultado_llm={"raw": result, "resultado": result_json},
+                )
+            except Exception:
+                pass
+
+            response = {"edital_id": edital_id, "resultado_llm": result, "resultado": result_json}
+            email_sent = False
+            email_error = None
+            if email:
+                if not is_valid_email(email):
+                    email_error = "Email inválido"
+                else:
+                    try:
+                        send_email(
+                            to_email=email,
+                            subject=f"MatchLLM - Resultado do match (edital_id={edital_id})",
+                            body_text=(
+                                f"Resultado do match para edital_id={edital_id}.\n"
+                                f"Consulta: {consulta}\n\n"
+                                f"O resultado (raw + estruturado) está anexado como JSON."
+                            ),
+                            attachments=[(
+                                f"match_edital_{edital_id}.json",
+                                json.dumps(response, ensure_ascii=False, indent=2).encode("utf-8"),
+                                "application/json",
+                            )],
+                        )
+                        email_sent = True
+                    except Exception as e:
+                        email_error = str(e)
+            response["email_sent"] = email_sent
+            if email_error:
+                response["email_error"] = email_error
+            return response
         except Exception as ex:
             tb = traceback.format_exc()
             # Retorna o resultado bruto e o erro para facilitar depuração, evitando 500 interno
@@ -243,7 +351,7 @@ async def gerar_requisitos(edital_id: int, model: str | None = None, max_chunks:
 
 
 @router.post("/match_multiple")
-async def match_multiple(request: "MatchMultipleRequest"):
+async def match_multiple(request: "MatchMultipleRequest", db: Session = Depends(get_db)):
     """
     Roda match para múltiplos `edital_id`s e retorna uma seção por edital com explicação técnica.
 
@@ -256,6 +364,14 @@ async def match_multiple(request: "MatchMultipleRequest"):
     """
     results = []
     try:
+        init_db()
+
+        prod_rec = None
+        try:
+            prod_rec = get_or_create(db, nome=request.produto.nome, atributos_json=request.produto.atributos)
+        except Exception:
+            prod_rec = None
+
         for eid in request.edital_ids:
             try:
                 if request.use_requisitos:
@@ -282,6 +398,27 @@ async def match_multiple(request: "MatchMultipleRequest"):
                 # Aplicar normalização por item
                 if isinstance(result_parsed, list):
                     result_parsed = [_normalize_match_item(it) for it in result_parsed]
+
+                # Persistir match no banco
+                try:
+                    if request.use_requisitos:
+                        create_match(
+                            db,
+                            edital_id=eid,
+                            produto_id=int(prod_rec.id) if prod_rec else None,
+                            consulta=request.consulta,
+                            resultado_llm={"resultado": result_parsed, "modo": "requisitos"},
+                        )
+                    else:
+                        create_match(
+                            db,
+                            edital_id=eid,
+                            produto_id=int(prod_rec.id) if prod_rec else None,
+                            consulta=request.consulta,
+                            resultado_llm={"raw": raw, "resultado": result_parsed},
+                        )
+                except Exception:
+                    pass
                 summary = _summarize_technical(result_parsed if isinstance(result_parsed, list) else (result_parsed or []))
 
                 results.append({
@@ -292,6 +429,36 @@ async def match_multiple(request: "MatchMultipleRequest"):
                 })
             except FileNotFoundError:
                 results.append({"edital_id": eid, "error": "Índice não encontrado"})
-        return {"consulta": request.consulta, "produto": request.produto, "results": results}
+        response = {"consulta": request.consulta, "produto": request.produto, "results": results}
+        email_sent = False
+        email_error = None
+        if request.email:
+            if not is_valid_email(request.email):
+                email_error = "Email inválido"
+            else:
+                try:
+                    send_email(
+                        to_email=request.email,
+                        subject="MatchLLM - Resultado do match (múltiplos editais)",
+                        body_text=(
+                            f"Resultado do match para {len(request.edital_ids)} editais.\n"
+                            f"Consulta: {request.consulta}\n\n"
+                            f"Os resultados estão anexados como JSON."
+                        ),
+                        attachments=[(
+                            "match_multiple.json",
+                            json.dumps(response, ensure_ascii=False, indent=2).encode("utf-8"),
+                            "application/json",
+                        )],
+                    )
+                    email_sent = True
+                except Exception as e:
+                    email_error = str(e)
+
+        response["email_sent"] = email_sent
+        if email_error:
+            response["email_error"] = email_error
+
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha no match múltiplo: {e}")

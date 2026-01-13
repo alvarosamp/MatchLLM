@@ -3,9 +3,9 @@ import streamlit as st
 import requests
 import json
 
-# Dentro do Docker, o hostname do serviço da API é "api"
-# Permite override via variável de ambiente
-API_URL = os.getenv("API_BASE_URL", "http://api:8000")
+# Dentro do Docker, o hostname do serviço da API é "api".
+# Fora do Docker (rodando local no Windows), normalmente é localhost.
+API_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
 st.title("Match Produto x Edital")
@@ -21,6 +21,8 @@ consulta = st.text_input(
     value="switch 24 portas poe",
 )
 
+recipient_email = st.text_input("Email para receber o resultado (opcional)", value="")
+
 if st.button("Rodar Match"):
     try:
         atributos = json.loads(atributos_raw)
@@ -33,7 +35,7 @@ if st.button("Rodar Match"):
         }
         resp = requests.post(
             f"{API_URL}/editais/match/{edital_id}",
-            params={"consulta": consulta},
+            params={"consulta": consulta, "email": recipient_email.strip() or None},
             json=payload,
         )
         if resp.status_code == 200:

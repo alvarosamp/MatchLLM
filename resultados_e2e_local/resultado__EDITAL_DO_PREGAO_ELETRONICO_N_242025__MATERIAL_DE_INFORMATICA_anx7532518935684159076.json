@@ -44,14 +44,14 @@
         "obrigatorio": true
       },
       "corrente_a": {
-        "valor_min": 1.0,
-        "valor_max": 1.0,
+        "valor_min": 2.0,
+        "valor_max": 2.0,
         "unidade": "A",
         "obrigatorio": true
       },
       "potencia_w": {
-        "valor_min": 230.0,
-        "valor_max": 230.0,
+        "valor_min": 60.0,
+        "valor_max": 60.0,
         "unidade": "W",
         "obrigatorio": true
       },
@@ -61,6 +61,12 @@
         "unidade": "Ah",
         "obrigatorio": true
       },
+      "memoria_ram_gb": {
+        "valor_min": 8.0,
+        "valor_max": 8.0,
+        "unidade": "GB",
+        "obrigatorio": true
+      },
       "armazenamento_gb": {
         "valor_min": 240.0,
         "valor_max": null,
@@ -68,8 +74,8 @@
         "obrigatorio": true
       },
       "portas": {
-        "valor_min": 8,
-        "valor_max": 8,
+        "valor_min": 20,
+        "valor_max": 20,
         "unidade": null,
         "obrigatorio": true
       },
@@ -78,13 +84,10 @@
         "valor_max": 8.0,
         "unidade": "Gbps",
         "obrigatorio": true
-      },
-      "memoria_ram_gb": {
-        "valor_min": 8.0,
-        "valor_max": 8.0,
-        "unidade": "GB",
-        "obrigatorio": true
       }
+    },
+    "_meta": {
+      "llm_skipped": true
     }
   },
   "matching": {
@@ -93,10 +96,10 @@
     "corrente_a": "NAO_ATENDE",
     "potencia_w": "NAO_ATENDE",
     "capacidade_ah": "NAO_ATENDE",
+    "memoria_ram_gb": "NAO_ATENDE",
     "armazenamento_gb": "NAO_ATENDE",
     "portas": "NAO_ATENDE",
-    "velocidade_gbps": "NAO_ATENDE",
-    "memoria_ram_gb": "NAO_ATENDE"
+    "velocidade_gbps": "NAO_ATENDE"
   },
   "score": {
     "score_percent": 22.22,
@@ -110,51 +113,35 @@
     "opcionais_duvida": 0,
     "status_geral": "REPROVADO",
     "key_requirements": {
-      "configured": [
-        "tensao_v"
-      ],
-      "present_in_edital": [
-        "tensao_v"
-      ],
-      "policy": "any",
-      "total": 1,
-      "atende": 1,
+      "configured": [],
+      "present_in_edital": [],
+      "policy": "all",
+      "total": 0,
+      "atende": 0,
       "nao_atende": 0,
       "duvida": 0,
-      "override_applied": true,
+      "override_applied": false,
       "base_status": "REPROVADO"
     },
     "sequence_filter": {
-      "configured": [
-        "corrente_a",
-        "capacidade_ah",
-        "tensao_v"
-      ],
-      "present_in_edital": [
-        "corrente_a"
-      ],
-      "steps": [
-        {
-          "requisito": "corrente_a",
-          "present": true,
-          "status": "NAO_ATENDE"
-        }
-      ],
-      "final_status": "REPROVADO",
-      "override_applied": true
+      "configured": [],
+      "present_in_edital": [],
+      "steps": [],
+      "final_status": null,
+      "override_applied": false
     }
   },
   "justificativas": {
     "garantia_meses": "ATENDE pela regra de comparação (esperado >= 12 meses; observado: 12 meses).",
     "tensao_v": "ATENDE pela regra de comparação (esperado >= 12.0 V; observado: 12.0 V).",
-    "corrente_a": "NAO_ATENDE pela comparação (esperado = 1.0 A; observado: 2.1 A).",
-    "potencia_w": "NAO_ATENDE porque o produto não informou este atributo (esperado = 230.0 W).",
+    "corrente_a": "NAO_ATENDE pela comparação (esperado = 2.0 A; observado: 2.1 A).",
+    "potencia_w": "NAO_ATENDE porque o produto não informou este atributo (esperado = 60.0 W).",
     "capacidade_ah": "NAO_ATENDE pela comparação (esperado = 9.0 Ah; observado: 7.0 Ah).",
-    "armazenamento_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado >= 240.0 GB).",
-    "portas": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8).",
-    "velocidade_gbps": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8.0 Gbps).",
     "memoria_ram_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8.0 GB).",
-    "_global": "Status geral: REPROVADO. Score: 22.22%. Filtro por sequência: final=REPROVADO, override=True. Presentes: ['corrente_a']. Requisitos-chave (policy=any): 1/1 atende, 0 não atende, 0 dúvida. Presentes: ['tensao_v']."
+    "armazenamento_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado >= 240.0 GB).",
+    "portas": "NAO_ATENDE porque o produto não informou este atributo (esperado = 20).",
+    "velocidade_gbps": "NAO_ATENDE porque o produto não informou este atributo (esperado = 8.0 Gbps).",
+    "_global": "Status geral: REPROVADO. Score: 22.22%."
   },
   "debug": {
     "ocr_edital": {
@@ -182,13 +169,7 @@
       }
     },
     "edital_chunks_total": 66,
-    "edital_chunks_usados": 10,
-    "edital_extract_strategy": "fullscan",
-    "fullscan_chunks_total": 122,
-    "fullscan_chunks_usados": 122,
-    "fullscan_llm_calls": 21,
-    "fullscan_chunk_max_tokens": 220,
-    "fullscan_window_chunks": 6,
-    "fullscan_stride_chunks": 6
+    "edital_chunks_usados": 20,
+    "edital_extract_strategy": "rag_then_full"
   }
 }

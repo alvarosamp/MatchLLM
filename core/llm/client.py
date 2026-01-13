@@ -22,6 +22,16 @@ class LLMClient:
     def __init__(self, model: str | None = None, base_url: str | None = None):
         # Permite sobrescrever via parâmetro; caso contrário usa env vars com defaults
         self.base_url = base_url or os.getenv("LLM_URL", "http://localhost:11434")
+
+        # Windows: muitas vezes o .env vem do docker-compose e define LLM_URL=http://ollama:11434
+        # (hostname só existe na rede Docker). No host Windows, isso causa erro de DNS.
+        try:
+            if os.name == "nt":
+                parsed = urlparse(self.base_url)
+                if (parsed.hostname or "").lower() == "ollama":
+                    self.base_url = urlunparse((parsed.scheme or "http", f"127.0.0.1:{parsed.port or 11434}", parsed.path or "", parsed.params or "", parsed.query or "", parsed.fragment or ""))
+        except Exception:
+            pass
         # Default alterado para um modelo menor por padrão (reduz RAM exigida)
         # Ajuste via env: export LLM_MODEL="mistral:7b-instruct-q4_0" ou "llama3:latest"
         # Usa modelo menor por padrão para reduzir risco de OOM
@@ -33,14 +43,15 @@ class LLMClient:
 
     @staticmethod
     def _get_timeout():
-        raw = os.getenv("LLM_TIMEOUT_SECONDS", "120")
+        # 180s por padrão: extrações podem demorar em PDFs grandes.
+        raw = os.getenv("LLM_TIMEOUT_SECONDS", "180")
         raw_s = str(raw or "").strip().lower()
         if raw_s in ("", "none", "null", "off", "false"):
             return None
         try:
             v = float(raw_s)
         except Exception:
-            return 120
+            return 180
         if v <= 0:
             return None
         return v
@@ -122,10 +133,12 @@ class LLMClient:
         except requests.exceptions.ConnectionError as ce:
             # Fallback automático: tenta localhost/127.0.0.1/ollama
             fallbacks = [
-                "http://localhost:11434",
                 "http://127.0.0.1:11434",
-                "http://ollama:11434",
+                "http://localhost:11434",
             ]
+            # Em Linux/Docker, 'ollama' pode existir como service name.
+            if os.name != "nt":
+                fallbacks.append("http://ollama:11434")
 
             tried = [self.base_url]
             for fb in fallbacks:
@@ -204,7 +217,12 @@ class LLMClient:
             ) from he
         except requests.exceptions.Timeout as te:
             logger.exception("Timeout ao gerar resposta do LLM")
-            raise RuntimeError("Tempo de espera excedido ao gerar resposta do LLM.") from te
+            timeout_msg = "sem timeout" if self.timeout is None else f"{self.timeout}s"
+            raise RuntimeError(
+                "Tempo de espera excedido ao gerar resposta do LLM. "
+                f"Timeout atual: {timeout_msg}. "
+                "Ajuste via LLM_TIMEOUT_SECONDS (ex.: 600) ou use 0/none para desabilitar."
+            ) from te
 
     def list_models(self) -> list:
         """Lista modelos disponíveis no Ollama."""

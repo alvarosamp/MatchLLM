@@ -1,0 +1,185 @@
+{
+  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_004415__Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_004415__EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf",
+  "produto_json": {
+    "nome": null,
+    "tipo_produto": null,
+    "atributos": {
+      "tensao_v": {
+        "valor": 12.0,
+        "unidade": "V"
+      },
+      "corrente_a": {
+        "valor": 2.1,
+        "unidade": "A"
+      },
+      "capacidade_ah": {
+        "valor": 7.0,
+        "unidade": "Ah"
+      },
+      "peso_kg": {
+        "valor": 2.1,
+        "unidade": "kg"
+      }
+    }
+  },
+  "edital_json": {
+    "item": null,
+    "tipo_produto": null,
+    "requisitos": {
+      "garantia_meses": {
+        "valor_min": 12,
+        "valor_max": null,
+        "unidade": "meses",
+        "obrigatorio": true
+      },
+      "tensao_v": {
+        "valor_min": 12.0,
+        "valor_max": null,
+        "unidade": "V",
+        "obrigatorio": true
+      },
+      "capacidade_ah": {
+        "valor_min": 9.0,
+        "valor_max": 9.0,
+        "unidade": "Ah",
+        "obrigatorio": true
+      }
+    },
+    "_meta": {
+      "llm_unparseable": true
+    }
+  },
+  "matching": {
+    "garantia_meses": "NAO_ATENDE",
+    "tensao_v": "ATENDE",
+    "capacidade_ah": "ATENDE"
+  },
+  "score": {
+    "score_percent": 66.67,
+    "obrigatorios_total": 3,
+    "obrigatorios_atende": 2,
+    "obrigatorios_nao_atende": 1,
+    "obrigatorios_duvida": 0,
+    "opcionais_total": 0,
+    "opcionais_atende": 0,
+    "opcionais_nao_atende": 0,
+    "opcionais_duvida": 0,
+    "status_geral": "REPROVADO",
+    "key_requirements": {
+      "configured": [],
+      "present_in_edital": [],
+      "policy": "all",
+      "total": 0,
+      "atende": 0,
+      "nao_atende": 0,
+      "duvida": 0,
+      "override_applied": false,
+      "base_status": "REPROVADO"
+    },
+    "sequence_filter": {
+      "configured": [],
+      "present_in_edital": [],
+      "steps": [],
+      "final_status": null,
+      "override_applied": false
+    }
+  },
+  "justificativas": {
+    "garantia_meses": "Faltou justificar a garantia meses",
+    "tensao_v": "Observado: valor do tensão V não foi fornecido",
+    "capacidade_ah": "Observado: valor da capacidade Ah não foi fornecido",
+    "_global": "O status final de uma comparação de produto vs edital é determinado pela presença ou ausência de requisitos-chave específicos que não estejam incluídos no edital. Em outras palavras, a comparação considera apenas os requisitos-chave presentes no edital e ignora aqueles que não estão mencionados."
+  },
+  "debug": {
+    "ocr_edital": {
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_004415__EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf",
+      "method": "gemini_forced",
+      "used_gemini": true,
+      "native_text": false,
+      "errors": []
+    },
+    "ocr_produto": {
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_000231__Produto36334IdArquivo15589.pdf",
+      "method": "gemini_forced",
+      "used_gemini": true,
+      "native_text": false,
+      "errors": []
+    },
+    "cache": {
+      "hit": false,
+      "produto": true,
+      "edital": false,
+      "hint_key": "generic|v2"
+    },
+    "edital_chunks_usados": 10,
+    "edital_extract_strategy": "rag_then_full"
+  },
+  "cliente": {
+    "status_geral": "APROVADO",
+    "score_percent": 66.67,
+    "obrigatorios_atende": 2,
+    "obrigatorios_total": 3,
+    "obrigatorios_nao_atende": 1,
+    "obrigatorios_duvida": 0,
+    "principais": [],
+    "atende": [
+      "capacidade_ah",
+      "tensao_v"
+    ],
+    "nao_atende": [
+      "garantia_meses"
+    ],
+    "duvida": [],
+    "itens": [
+      {
+        "chave": "capacidade_ah",
+        "status": "ATENDE",
+        "obrigatorio": true,
+        "requisito": {
+          "valor": null,
+          "valor_min": 9.0,
+          "valor_max": 9.0,
+          "unidade": "Ah"
+        },
+        "produto": {
+          "valor": 7.0,
+          "unidade": "Ah"
+        },
+        "justificativa": "Observado: valor da capacidade Ah não foi fornecido"
+      },
+      {
+        "chave": "garantia_meses",
+        "status": "NAO_ATENDE",
+        "obrigatorio": true,
+        "requisito": {
+          "valor": null,
+          "valor_min": 12,
+          "valor_max": null,
+          "unidade": "meses"
+        },
+        "produto": {
+          "valor": null,
+          "unidade": null
+        },
+        "justificativa": "Faltou justificar a garantia meses"
+      },
+      {
+        "chave": "tensao_v",
+        "status": "ATENDE",
+        "obrigatorio": true,
+        "requisito": {
+          "valor": null,
+          "valor_min": 12.0,
+          "valor_max": null,
+          "unidade": "V"
+        },
+        "produto": {
+          "valor": 12.0,
+          "unidade": "V"
+        },
+        "justificativa": "Observado: valor do tensão V não foi fornecido"
+      }
+    ]
+  }
+}

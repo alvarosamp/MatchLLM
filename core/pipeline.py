@@ -53,9 +53,8 @@ def processar_datasheet(
 
     return {
         "produto_id": produto.id,
-        "fabricante": fabricante,
-        "modelo": modelo,
-        "specs": specs,
+        "nome": getattr(produto, "nome", None) or f"{fabricante} {modelo}".strip(),
+        "atributos_json": getattr(produto, "atributos_json", None) or specs,
     }
 
 
@@ -181,7 +180,7 @@ def process_edital(pdf_path: str, edital_id: int) -> Dict[str, Any]:
             extraction_log.append(f"ocr_error: {e}")
             # tenta Gemini como fallback
             try:
-                texto_gemini = extractor.extract_text_gemini(str(pdf_path))
+                texto_gemini = extractor.extract_text_gemini(str(pdf_path), log_label="doc")
                 texto = texto_gemini
                 extraction_log.append("gemini")
             except Exception as e2:

@@ -168,7 +168,7 @@ def produto_from_datasheet(pdf: Path) -> dict:
                 try:
                     logger.info("[produto] Muitos campos ausentes (>=70%). Tentando OCR via Gemini...")
                     extractor_g = PDFExtractor()
-                    raw_text2 = extractor_g.extract_text_gemini(str(pdf))
+                    raw_text2 = extractor_g.extract_text_gemini(str(pdf), log_label="doc")
                     norm_text2 = normalize_text(raw_text2 or "")
                     resp2 = pe.extract(norm_text2)
                     data2 = _parse_resp(resp2)
@@ -193,7 +193,7 @@ def produto_from_datasheet(pdf: Path) -> dict:
         if use_gemini:
             try:
                 logger.info("[produto] Extração via LLM falhou: %s. Tentando OCR via Gemini...", e)
-                raw_text2 = PDFExtractor().extract_text_gemini(str(pdf))
+                raw_text2 = PDFExtractor().extract_text_gemini(str(pdf), log_label="doc")
                 norm_text2 = normalize_text(raw_text2 or "")
                 pe = ProductExtractor()
                 resp2 = pe.extract(norm_text2)

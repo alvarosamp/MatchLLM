@@ -82,11 +82,12 @@ class PDFExtractor:
         result = self.ocr_model(doc)
         return result.render()
     
-    def extract_text_gemini(self, pdf_path: str) -> str:
+    def extract_text_gemini(self, pdf_path: str, *, log_label: str | None = None) -> str:
         """
         Extrai texto usando o Gemini (Google Generative AI) via Files API.
         Requer a variável de ambiente GEMINI_API_KEY (ou GOOGLE_API_KEY).
         """
+        label = (log_label or "doc").strip() or "doc"
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY/GOOGLE_API_KEY não definida para OCR com Gemini.")
@@ -130,16 +131,16 @@ class PDFExtractor:
         last_err = None
         for name in candidates:
             try:
-                print(f"[produto] Tentando modelo Gemini: {name}")
+                print(f"[{label}] Tentando modelo Gemini: {name}")
                 model = genai.GenerativeModel(name)
                 # Checagem mínima: tenta um prompt trivial sem arquivo (não executa geração pesada)
                 _ = getattr(model, "model_name", name)
-                print(f"[produto] Modelo Gemini selecionado: {name}")
+                print(f"[{label}] Modelo Gemini selecionado: {name}")
                 break
             except Exception as e:
                 last_err = e
                 model = None
-                print(f"[produto] Falha ao usar modelo {name}: {e}")
+                print(f"[{label}] Falha ao usar modelo {name}: {e}")
         if model is None:
             raise RuntimeError(f"Nenhum modelo Gemini válido encontrado. Último erro: {last_err}")
 
@@ -166,7 +167,7 @@ class PDFExtractor:
         last_err = None
         for name in candidates:
             try:
-                print(f"[produto] Gerando conteúdo com modelo Gemini: {name}")
+                print(f"[{label}] Gerando conteúdo com modelo Gemini: {name}")
                 model = genai.GenerativeModel(name)
                 resp = model.generate_content([prompt, uploaded])
                 # Extrai texto das propriedades possíveis
@@ -178,26 +179,27 @@ class PDFExtractor:
                         txt = None
                 if txt:
                     text = txt
-                    print(f"[produto] OCR Gemini bem-sucedido com: {name}")
+                    print(f"[{label}] OCR Gemini bem-sucedido com: {name}")
                     break
                 else:
                     last_err = RuntimeError(f"Modelo {name} não retornou texto.")
-                    print(f"[produto] Modelo {name} retornou sem texto.")
+                    print(f"[{label}] Modelo {name} retornou sem texto.")
             except Exception as e:
                 last_err = e
-                print(f"[produto] Falha ao gerar com {name}: {e}")
+                print(f"[{label}] Falha ao gerar com {name}: {e}")
 
         if not text and last_err:
             raise RuntimeError(f"Nenhum modelo Gemini produziu texto. Último erro: {last_err}")
 
         return text or ""
 
-    def extract(self, pdf_path: str) -> str:
+    def extract(self, pdf_path: str, *, log_label: str | None = None) -> str:
         """
         Extrai o texto de um pdf, tentando primeiro o metodo nativo
         e depois o OCR se necessario
         Retorna o texto extraido
         """
+        label = (log_label or "doc").strip() or "doc"
         self.last_meta = {
             "pdf_path": pdf_path,
             "method": None,
@@ -212,10 +214,14 @@ class PDFExtractor:
             if not api_key:
                 raise RuntimeError("OCR_FORCE_GEMINI=1, mas GEMINI_API_KEY/GOOGLE_API_KEY não está definida.")
             try:
-                print("PDFExtractor: usando OCR via Gemini (OCR_FORCE_GEMINI=1)...")
-                txt = self.extract_text_gemini(pdf_path)
+                print(f"PDFExtractor: usando OCR via Gemini (OCR_FORCE_GEMINI=1) [{label}]...")
+                txt = self.extract_text_gemini(pdf_path, log_label=label)
                 self.last_meta["method"] = "gemini_forced"
                 self.last_meta["used_gemini"] = True
+                try:
+                    self.last_meta["gemini_quality"] = self._text_quality(txt)
+                except Exception:
+                    pass
                 return txt
             except Exception as e:
                 print(f"PDFExtractor: OCR Gemini falhou; caindo para fallback padrão: {e}")
@@ -255,7 +261,7 @@ class PDFExtractor:
             if api_key:
                 try:
                     print("PDFExtractor: OCR local baixa qualidade; tentando OCR via Gemini...")
-                    txt2 = self.extract_text_gemini(pdf_path)
+                    txt2 = self.extract_text_gemini(pdf_path, log_label=label)
                     self.last_meta["method"] = "gemini_after_doctr"
                     self.last_meta["used_gemini"] = True
                     self.last_meta["gemini_quality"] = self._text_quality(txt2)
@@ -280,9 +286,13 @@ class PDFExtractor:
             if api_key:
                 try:
                     print("PDFExtractor: tentando OCR via Gemini como fallback...")
-                    txt = self.extract_text_gemini(pdf_path)
+                    txt = self.extract_text_gemini(pdf_path, log_label=label)
                     self.last_meta["method"] = "gemini_fallback"
                     self.last_meta["used_gemini"] = True
+                    try:
+                        self.last_meta["gemini_quality"] = self._text_quality(txt)
+                    except Exception:
+                        pass
                     return txt
                 except Exception as e2:
                     print(f"Falha no OCR via Gemini: {e2}")

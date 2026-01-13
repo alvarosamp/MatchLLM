@@ -1,9 +1,23 @@
 import os
+import sys
+from pathlib import Path
 import streamlit as st
 import requests
 
-# Dentro do Docker, o hostname do serviço da API é "api"
-API_URL = os.getenv("API_BASE_URL", "http://api:8000")
+
+def _ensure_repo_root_on_path() -> None:
+    here = Path(__file__).resolve()
+    for parent in [here.parent, *here.parents]:
+        if (parent / "core").is_dir():
+            sys.path.insert(0, str(parent))
+            return
+
+
+_ensure_repo_root_on_path()
+
+# Dentro do Docker, o hostname do serviço da API é "api".
+# Fora do Docker (rodando local no Windows), normalmente é localhost.
+API_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 st.title("Upload de Editais (múltiplos)")
 

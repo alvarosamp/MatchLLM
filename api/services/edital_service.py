@@ -1,30 +1,39 @@
-import shutil 
-import secrets
+import shutil
 from pathlib import Path
+
+from sqlalchemy.orm import Session
+
 from core.pipeline import process_edital, match_produto_edital, extract_requisitos_edital, match_produto_com_requisitos
 from api.models.edital import Produto
+from db.repositories.edital_repo import create_edital
 
 DATA_EDITAIS_DIR = Path("data/editais")
 DATA_EDITAIS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def salvar_edital_upload(file) -> tuple[int, str]:
+def salvar_edital_upload(file, *, filename: str | None, db: Session) -> tuple[int, str]:
+    """Salva o PDF e cria registro em `editais`.
+
+    Retorna (edital_id, caminho_pdf).
     """
-    Salva o arquivo PDF enviado e retorna (edital_id, caminho).
-    edital_id aqui está simulando. Depois você pode integrar com DB.
-    """
-    edital_id = secrets.randbelow(1_000_000_000)
-    filename = f"edital_{edital_id}.pdf"
-    dest_path = DATA_EDITAIS_DIR / filename
+    rec = create_edital(db, nome=filename, caminho_pdf=None)
+    filename_eff = filename or f"edital_{rec.id}.pdf"
+    dest_path = DATA_EDITAIS_DIR / f"edital_{rec.id}__{filename_eff}"
 
     with open(dest_path, "wb") as f:
         shutil.copyfileobj(file, f)
 
-    return edital_id, str(dest_path)
+    # Atualiza caminho no registro
+    rec.caminho_pdf = str(dest_path)
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+
+    return int(rec.id), str(dest_path)
 
 
-def processar_edital(file) -> dict:
-    edital_id, pdf_path = salvar_edital_upload(file)
+def processar_edital(file, *, filename: str | None, db: Session) -> dict:
+    edital_id, pdf_path = salvar_edital_upload(file, filename=filename, db=db)
     result = process_edital(pdf_path, edital_id)
     return result
 

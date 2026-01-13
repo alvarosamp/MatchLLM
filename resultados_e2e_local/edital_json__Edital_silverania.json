@@ -1,5 +1,57 @@
 {
   "item": null,
   "tipo_produto": null,
-  "requisitos": {}
+  "requisitos": {
+    "garantia_meses": {
+      "valor_min": 12,
+      "valor_max": null,
+      "unidade": "meses",
+      "obrigatorio": true
+    },
+    "tensao_v": {
+      "valor_min": 250.0,
+      "valor_max": null,
+      "unidade": "V",
+      "obrigatorio": true
+    },
+    "corrente_a": {
+      "valor_min": 21.0,
+      "valor_max": 21.0,
+      "unidade": "A",
+      "obrigatorio": true
+    },
+    "potencia_w": {
+      "valor_min": 75.0,
+      "valor_max": 75.0,
+      "unidade": "W",
+      "obrigatorio": true
+    },
+    "memoria_ram_gb": {
+      "valor_min": 64.0,
+      "valor_max": null,
+      "unidade": "GB",
+      "obrigatorio": true
+    },
+    "armazenamento_gb": {
+      "valor_min": 64.0,
+      "valor_max": null,
+      "unidade": "GB",
+      "obrigatorio": true
+    },
+    "portas": {
+      "valor_min": 24,
+      "valor_max": 24,
+      "unidade": null,
+      "obrigatorio": true
+    },
+    "velocidade_gbps": {
+      "valor_min": 1.65,
+      "valor_max": 1.65,
+      "unidade": "Gbps",
+      "obrigatorio": true
+    }
+  },
+  "_meta": {
+    "llm_skipped": true
+  }
 }

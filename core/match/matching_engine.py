@@ -130,13 +130,20 @@ def _convert_value(val: float, unit_from: str | None, unit_to: str | None) -> fl
     return None
 
 
-def _get_tolerance_for_key(key: str) -> float:
+def _get_tolerance_for_key(key: str, overrides: dict | None = None) -> float:
     """Retorna tolerância percentual (0.0 a 1.0) para um requisito.
 
     - MATCH_TOLERANCE_PCT: ex. "5" (5%) ou "0.05" (5%)
     - MATCH_TOLERANCE_OVERRIDES: ex. "tensao_v=0.02,capacidade_ah=0.1"
     """
     import os
+
+    if overrides and key in overrides:
+        try:
+            x = float(overrides[key])
+            return x / 100.0 if x > 1.0 else max(0.0, x)
+        except Exception:
+            pass
 
     overrides = str(os.getenv("MATCH_TOLERANCE_OVERRIDES", "") or "").strip()
     if overrides:
@@ -170,7 +177,8 @@ class MatchingEngine:
     def compare(
         self,
         produto: Dict[str, Any],
-        edital: Dict[str, Any]
+        edital: Dict[str, Any],
+        tolerance_overrides: dict | None = None,
     ) -> Dict[str, str]:
 
         resultados: Dict[str, str] = {}
@@ -221,7 +229,7 @@ class MatchingEngine:
                     continue
                 v_prod = converted
 
-            tol = _get_tolerance_for_key(str(requisito))
+            tol = _get_tolerance_for_key(str(requisito), overrides=tolerance_overrides)
 
             # Mínimo (com tolerância)
             if vmin is not None:

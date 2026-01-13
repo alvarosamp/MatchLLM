@@ -14,14 +14,41 @@ OFFLINE (sem LLM, usa fallbacks heurísticos):
   $env:LLM_DISABLE = "1"
   & $py .\run_editais.py
 
-COM LLM (Ollama ou outro endpoint configurado):
+  COM LLM (Ollama ou outro endpoint configurado)
+
+  Pré-requisito: o servidor do LLM precisa estar rodando.
+
+  Opção A) Ollama LOCAL (Windows)
+
+  1) Instale e rode o Ollama (app/serviço). Depois confirme que está respondendo em:
+     http://localhost:11434
+
+  2) (Opcional) Baixe o modelo que você quer usar (via ollama):
+     ollama pull llama3.1
+
+  3) Rode o MatchLLM apontando para o localhost:
+
+    $py = "C:/Users/vish8/OneDrive/Documentos/MatchLLM/.venv/Scripts/python.exe"
+    $env:LLM_DISABLE = "0"
+    $env:LLM_URL = "http://localhost:11434"
+    $env:LLM_MODEL = "llama3.1"          # ajuste para o modelo que você tiver
+    $env:LLM_TIMEOUT_SECONDS = "180"     # evita timeout em PDFs maiores
+    & $py .\run_editais.py
+
+  Opção B) Via Docker Compose (API/Dashboard + Ollama)
+
+  1) Suba os serviços (use o compose do projeto):
+
+    docker compose -f .\docker\docker-compose.yaml up -d --build
+
+  2) Nesse modo, normalmente o hostname interno do ollama é "http://ollama:11434".
+     Você pode usar o .env do projeto (LLM_URL=http://ollama:11434) e rodar:
 
   $py = "C:/Users/vish8/OneDrive/Documentos/MatchLLM/.venv/Scripts/python.exe"
-  $env:LLM_DISABLE = "0"
-  # se estiver rodando local, tipicamente: http://localhost:11434
-  # se estiver rodando via docker-compose, tipicamente: http://ollama:11434
-  # $env:LLM_URL = "http://localhost:11434"
-  # $env:LLM_MODEL = "llama3.1"
+    $env:LLM_DISABLE = "0"
+    $env:LLM_URL = "http://ollama:11434"
+    $env:LLM_MODEL = "llama3.1"
+    $env:LLM_TIMEOUT_SECONDS = "180"
   & $py .\run_editais.py
 
 3) Rodar um único par (edital + produto)
@@ -30,6 +57,33 @@ COM LLM (Ollama ou outro endpoint configurado):
   & $py .\run_pipeline.py
 
 Obs.: o run_pipeline.py usa os arquivos padrão do projeto (ver o próprio arquivo para paths).
+
+3b) Rodar pelo DASHBOARD (Streamlit) — recomendado para cliente
+
+  O dashboard permite:
+  - enviar vários PDFs de editais
+  - enviar vários PDFs de produtos (datasheets)
+  - executar em lote (N x N) e baixar um ZIP com todos os resultados
+
+  1) Ative o venv:
+
+    & C:\Users\vish8\OneDrive\Documentos\MatchLLM\.venv\Scripts\Activate.ps1
+
+  2) Rode o Streamlit (na raiz do projeto):
+
+    streamlit run .\dashboard\home.py
+
+  3) No navegador:
+     - Abra a página **Match**
+     - Envie os PDFs (editais e produtos)
+     - Clique em **Executar Match**
+     - Baixe o arquivo **ZIP** gerado
+
+  Observação sobre LLM:
+  - Se o LLM estiver habilitado, garanta que o Ollama esteja rodando (por padrão: http://localhost:11434)
+  - Para modo OFFLINE (sem LLM):
+      $env:LLM_DISABLE = "1"
+    (O sistema usa heurísticas/fallbacks para não travar.)
 
 4) Ajustes úteis via variáveis de ambiente
 
@@ -52,7 +106,75 @@ Tolerância numérica (reduz falsos NAO_ATENDE em valores próximos):
 - JSON por edital: resultados_e2e_local/
 - O nome do arquivo de saída é mostrado no final do relatório.
 
+6) Cache em banco (para não reprocessar PDFs repetidos)
+
+- O cache usa o banco configurado via `DATABASE_URL`.
+  - No Docker Compose, isso normalmente aponta para o Postgres do serviço `postgres`.
+  - Fora do Docker (sem `DATABASE_URL`), o fallback é um SQLite local em:
+    data/matchllm.sqlite
+
+- Nota (dev): se você já tinha um `data/matchllm.sqlite` antigo (schema antigo com fabricante/modelo/specs),
+  o sistema faz backup automático para `data/matchllm.sqlite.backup_YYYYMMDD_HHMMSS` e recria o banco.
+
+- Quando você roda pelo dashboard:
+  - se o mesmo PDF de produto (datasheet) já foi processado antes, ele reaproveita o JSON extraído
+  - se o mesmo PDF de edital já foi processado antes (para o mesmo tipo de produto), ele reaproveita os requisitos extraídos
+  - se o mesmo par (edital x produto) já foi rodado com a mesma configuração, ele reaproveita o resultado final
+
+Isso reduz tempo e custo (principalmente chamadas ao LLM/OCR).
+
 SEGURANÇA / CHAVES
 
 - Evite commitar arquivos .env com chaves (GOOGLE_API_KEY/GEMINI_API_KEY).
 - Se você for compartilhar o projeto, remova/mascare essas chaves antes.
+
+
+EMAIL (envio do resultado do match)
+
+- O projeto suporta enviar o resultado do match por email via SMTP.
+- Funciona tanto na API (`/editais/match/{edital_id}` com query param `email`) quanto no Dashboard (botão "Enviar resultados por email").
+
+Variáveis de ambiente:
+
+  $env:SMTP_HOST = "smtp.seu_provedor.com"
+  $env:SMTP_PORT = "587"
+  $env:SMTP_FROM = "matchllm@seu_dominio.com"
+  $env:SMTP_USER = "matchllm@seu_dominio.com"   # opcional (se o SMTP exigir autenticação)
+  $env:SMTP_PASS = "SUA_SENHA_OU_APP_PASSWORD"  # opcional (se o SMTP exigir autenticação)
+  $env:SMTP_TLS  = "1"                          # 1/0 (default=1)
+  $env:SMTP_SSL  = "0"                          # 1/0 (default=0). Se 1, usa SSL direto (ex.: porta 465) e ignora SMTP_TLS.
+
+Observações:
+- Muitos provedores (Gmail/Outlook) exigem "app password" ou SMTP autenticado.
+- Se as variáveis não estiverem configuradas, o envio falha mas o match continua funcionando.
+
+Exemplo pronto (Gmail)
+
+- Pré-requisito: a conta que vai ENVIAR (ex.: alvaroscareli@gmail.com) precisa ter 2FA e um "App password".
+  - Você NÃO deve colocar sua senha normal no `SMTP_PASS`.
+
+PowerShell:
+
+  $env:SMTP_HOST = "smtp.gmail.com"
+  $env:SMTP_PORT = "587"                       # STARTTLS
+  $env:SMTP_FROM = "alvaroscareli@gmail.com"
+  $env:SMTP_USER = "alvaroscareli@gmail.com"
+  $env:SMTP_PASS = "SEU_APP_PASSWORD_AQUI"
+  $env:SMTP_TLS  = "1"
+  $env:SMTP_SSL  = "0"
+
+Alternativa Gmail (SSL direto):
+
+  $env:SMTP_HOST = "smtp.gmail.com"
+  $env:SMTP_PORT = "465"                       # SSL
+  $env:SMTP_FROM = "alvaroscareli@gmail.com"
+  $env:SMTP_USER = "alvaroscareli@gmail.com"
+  $env:SMTP_PASS = "SEU_APP_PASSWORD_AQUI"
+  $env:SMTP_SSL  = "1"
+
+Teste rápido (envia um email de teste com anexo JSON):
+
+  $py = "C:/Users/vish8/OneDrive/Documentos/MatchLLM/.venv/Scripts/python.exe"
+  & $py .\scripts\send_test_email.py --to "alvaroscareli@gmail.com"
+  # ou:
+  & $py .\scripts\send_test_email.py --to "alvaro.sampaio@ges.inatel.br"
