@@ -124,6 +124,7 @@ def _client_summary(result: dict) -> dict:
     edital_json = result.get("edital_json") if isinstance(result.get("edital_json"), dict) else {}
     produto_json = result.get("produto_json") if isinstance(result.get("produto_json"), dict) else {}
     justificativas = result.get("justificativas") if isinstance(result.get("justificativas"), dict) else {}
+    debug = result.get("debug") if isinstance(result.get("debug"), dict) else {}
 
     reqs = edital_json.get("requisitos") if isinstance(edital_json.get("requisitos"), dict) else {}
     attrs = produto_json.get("atributos") if isinstance(produto_json.get("atributos"), dict) else {}
@@ -215,6 +216,11 @@ def _client_summary(result: dict) -> dict:
         "obrigatorios_nao_atende": score.get("obrigatorios_nao_atende"),
         "obrigatorios_duvida": score.get("obrigatorios_duvida"),
         "principais": principais,
+        # Meta completo do OCR (para auditoria / cliente). Pode vir como dict ou string JSON.
+        "ocr": {
+            "edital": _normalize_ocr_meta(debug.get("ocr_edital")),
+            "produto": _normalize_ocr_meta(debug.get("ocr_produto")),
+        },
         "atende": atende,
         "nao_atende": nao_atende,
         "duvida": duvida,
@@ -1185,6 +1191,35 @@ if run_clicked:
             if itens:
                 st.write("Itens (detalhado)")
                 st.dataframe(itens, use_container_width=True)
+
+            with st.expander("OCR (JSON completo)"):
+                if isinstance(result_obj, dict):
+                    dbg = result_obj.get("debug") if isinstance(result_obj.get("debug"), dict) else {}
+                    ocr_payload = resumo.get("ocr") if isinstance(resumo.get("ocr"), dict) else None
+                    if not isinstance(ocr_payload, dict):
+                        ocr_payload = {
+                            "edital": _normalize_ocr_meta(dbg.get("ocr_edital")),
+                            "produto": _normalize_ocr_meta(dbg.get("ocr_produto")),
+                        }
+
+                    ocr_edital = ocr_payload.get("edital") if isinstance(ocr_payload, dict) else None
+                    ocr_produto = ocr_payload.get("produto") if isinstance(ocr_payload, dict) else None
+
+                    if ocr_edital is None and ocr_produto is None:
+                        st.info("Este resultado não trouxe metadados de OCR no JSON (chaves debug.ocr_edital / debug.ocr_produto ausentes).")
+                    else:
+                        st.write("Edital")
+                        st.json(ocr_edital or {})
+                        st.write("Produto")
+                        st.json(ocr_produto or {})
+                else:
+                    st.info("Sem OCR: resultado não está em formato JSON/dict.")
+
+            with st.expander("JSON completo do match"):
+                if isinstance(result_obj, dict):
+                    st.json(result_obj)
+                else:
+                    st.write(result_obj)
     else:
         st.info("Nenhum resultado gerado (só erros). Veja a tabela de resumo.")
 

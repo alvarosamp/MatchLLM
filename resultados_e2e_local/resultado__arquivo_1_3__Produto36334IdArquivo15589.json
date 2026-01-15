@@ -1,6 +1,6 @@
 {
-  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_132650__Produto36334IdArquivo15589.pdf",
-  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_132650__Edital_silverania.pdf",
+  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__arquivo_1_3.pdf",
   "produto_json": {
     "nome": null,
     "tipo_produto": null,
@@ -28,9 +28,15 @@
     "tipo_produto": null,
     "requisitos": {
       "tensao_v": {
-        "valor_min": 250.0,
-        "valor_max": 250.0,
+        "valor_min": 115.0,
+        "valor_max": null,
         "unidade": "V",
+        "obrigatorio": true
+      },
+      "capacidade_ah": {
+        "valor_min": 7.0,
+        "valor_max": 7.0,
+        "unidade": "Ah",
         "obrigatorio": true
       }
     },
@@ -39,12 +45,13 @@
     }
   },
   "matching": {
-    "tensao_v": "NAO_ATENDE"
+    "tensao_v": "NAO_ATENDE",
+    "capacidade_ah": "ATENDE"
   },
   "score": {
-    "score_percent": 0.0,
-    "obrigatorios_total": 1,
-    "obrigatorios_atende": 0,
+    "score_percent": 50.0,
+    "obrigatorios_total": 2,
+    "obrigatorios_atende": 1,
     "obrigatorios_nao_atende": 1,
     "obrigatorios_duvida": 0,
     "opcionais_total": 0,
@@ -72,20 +79,21 @@
     }
   },
   "justificativas": {
-    "tensao_v": "O valor do produto de 12.0 V não atende ao requisito, pois está abaixo do valor mínimo de 250.0 V.",
-    "_global": "O status final da comparação de produto vs edital é REPROVADO porque a política de verificação é \"all\", ou seja, todos os requisitos devem ser atendidos. O score_percent é 0,0, indicando que nenhum dos requisitos foi atendido."
+    "tensao_v": "O valor do produto (12.0 V) não atende ao requisito de tensão, pois é menor que o valor mínimo permitido (115.0 V).",
+    "capacidade_ah": "O valor do produto (7.0 Ah) está dentro da faixa permitida (entre 7.0 e 7.0 Ah), portanto atende ao requisito.",
+    "_global": "O status final da comparação de produto vs edital é REPROVADO porque a política de verificação de requisitos-chave foi definida como \"all\", indicando que todos os requisitos devem ser atendidos. Nesse caso, apenas 1 dos 2 requisitos-chave (tensao_v) foi atendido, o que não é suficiente para aprovar a comparação."
   },
   "debug": {
     "ocr_edital": {
-      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_132650__Edital_silverania.pdf",
+      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__arquivo_1_3.pdf",
       "method": "gemini_forced",
       "used_gemini": true,
       "native_text": false,
       "errors": [],
       "gemini_quality": {
-        "chars": 178518,
-        "words": 27169,
-        "alnum_ratio": 0.8017454822482887
+        "chars": 154359,
+        "words": 23047,
+        "alnum_ratio": 0.8079865767464158
       }
     },
     "ocr_produto": {
@@ -105,24 +113,24 @@
     "edital_extract_strategy": "rag_then_full"
   },
   "cliente": {
-    "status_geral": "REPROVADO",
-    "score_percent": 0.0,
-    "obrigatorios_atende": 0,
-    "obrigatorios_total": 1,
+    "status_geral": "DUVIDOSO",
+    "score_percent": 50.0,
+    "obrigatorios_atende": 1,
+    "obrigatorios_total": 2,
     "obrigatorios_nao_atende": 1,
     "obrigatorios_duvida": 0,
     "principais": [],
     "ocr": {
       "edital": {
-        "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_132650__Edital_silverania.pdf",
+        "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__arquivo_1_3.pdf",
         "method": "gemini_forced",
         "used_gemini": true,
         "native_text": false,
         "errors": [],
         "gemini_quality": {
-          "chars": 178518,
-          "words": 27169,
-          "alnum_ratio": 0.8017454822482887
+          "chars": 154359,
+          "words": 23047,
+          "alnum_ratio": 0.8079865767464158
         }
       },
       "produto": {
@@ -133,27 +141,45 @@
         "errors": []
       }
     },
-    "atende": [],
+    "atende": [
+      "capacidade_ah"
+    ],
     "nao_atende": [
       "tensao_v"
     ],
     "duvida": [],
     "itens": [
       {
+        "chave": "capacidade_ah",
+        "status": "ATENDE",
+        "obrigatorio": true,
+        "requisito": {
+          "valor": null,
+          "valor_min": 7.0,
+          "valor_max": 7.0,
+          "unidade": "Ah"
+        },
+        "produto": {
+          "valor": 7.0,
+          "unidade": "Ah"
+        },
+        "justificativa": "O valor do produto (7.0 Ah) está dentro da faixa permitida (entre 7.0 e 7.0 Ah), portanto atende ao requisito."
+      },
+      {
         "chave": "tensao_v",
         "status": "NAO_ATENDE",
         "obrigatorio": true,
         "requisito": {
           "valor": null,
-          "valor_min": 250.0,
-          "valor_max": 250.0,
+          "valor_min": 115.0,
+          "valor_max": null,
           "unidade": "V"
         },
         "produto": {
           "valor": 12.0,
           "unidade": "V"
         },
-        "justificativa": "O valor do produto de 12.0 V não atende ao requisito, pois está abaixo do valor mínimo de 250.0 V."
+        "justificativa": "O valor do produto (12.0 V) não atende ao requisito de tensão, pois é menor que o valor mínimo permitido (115.0 V)."
       }
     ]
   }
