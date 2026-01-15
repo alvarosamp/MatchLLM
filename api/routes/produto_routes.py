@@ -9,7 +9,13 @@ from typing import Optional
 from db.repositories.produto_repo import get_or_create
 from db.models.produtos import Produto
 
-router = APIRouter(prefix="/produtos", tags=["Produtos"])
+from api.auth.deps import get_current_user
+
+router = APIRouter(
+    prefix="/produtos",
+    tags=["Produtos"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def get_db():
@@ -56,12 +62,18 @@ async def upload_produto_json(produto: dict = Body(...), fabricante: Optional[st
     {"nome": ..., "atributos": {...}, "origem": ...}
     """
     init_db()
-    fab = fabricante or produto.get("fabricante") or produto.get("origem") or "desconhecido"
-    mod = modelo or produto.get("modelo") or produto.get("nome") or "desconhecido"
-    specs = produto.get("atributos") or produto.get("specs") or produto
+    # Mantém compatibilidade com payloads antigos
+    fab = fabricante or produto.get("fabricante") or produto.get("origem")
+    mod = modelo or produto.get("modelo")
+    nome = produto.get("nome")
+    if not (isinstance(nome, str) and nome.strip()):
+        # fallback: junta fabricante/modelo
+        nome = f"{fab or ''} {mod or ''}".strip() or "desconhecido"
+
+    specs = produto.get("atributos") or produto.get("atributos_json") or produto.get("specs") or produto
     try:
-        prod = get_or_create(db, fabricante=fab, modelo=mod, specs=specs)
-        return {"produto_id": prod.id, "fabricante": prod.fabricante, "modelo": prod.modelo, "specs": prod.specs}
+        prod = get_or_create(db, nome=nome, atributos_json=specs)
+        return {"produto_id": prod.id, "nome": prod.nome, "atributos_json": prod.atributos_json}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao persistir produto JSON: {e}")
 
@@ -74,7 +86,7 @@ async def listar_produtos(db: Session = Depends(get_db)):
         produtos = db.query(Produto).all()
         out = []
         for p in produtos:
-            out.append({"id": p.id, "fabricante": p.fabricante, "modelo": p.modelo, "specs": p.specs})
+            out.append({"id": p.id, "nome": p.nome, "atributos_json": p.atributos_json, "criado_em": str(p.criado_em)})
         return out
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
