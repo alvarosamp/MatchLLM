@@ -1,7 +1,19 @@
 import os
 import json
+import sys
 from pathlib import Path
 import streamlit as st
+
+
+def _ensure_repo_root_on_path() -> None:
+    here = Path(__file__).resolve()
+    for parent in [here.parent, *here.parents]:
+        if (parent / "core").is_dir():
+            sys.path.insert(0, str(parent))
+            return
+
+
+_ensure_repo_root_on_path()
 
 PRODUTOS_DIR = Path("data/produtos")
 PRODUTOS_DIR.mkdir(parents=True, exist_ok=True)

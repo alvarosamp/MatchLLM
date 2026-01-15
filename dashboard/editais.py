@@ -2,9 +2,9 @@ import os
 import streamlit as st
 import requests
 
-# Dentro do Docker, o hostname do serviço da API é "api"
-# Permite override via variável de ambiente
-API_URL = os.getenv("API_BASE_URL", "http://api:8000")
+# Dentro do Docker, o hostname do serviço da API é "api".
+# Fora do Docker (rodando local no Windows), normalmente é localhost.
+API_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
 st.title("Upload de Editais")

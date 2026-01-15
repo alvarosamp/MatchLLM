@@ -1,0 +1,43 @@
+Características Dimensionais Denominação Comercial 12MVA- 7
+Comprimento Largura Altura Total Peso ( ±5% ) Capacidade Nominal (20hs; 1.75Vpe, 25ºC) 7 Ah
+151mm. 65mm. 98mm. 2,1 Kg.
+Tipo Estacionária Moura No-Break VRLA -AGM
+Marca Moura MVA
+Características Gerais. Projeto Acumuladores Moura S/A
+Tensão Nominal 12 Volts.
+País de Fabricação China
+Temperatura de Referência 25ºC.
+Temperatura Máxima de trabalho Máx: 50ºC
+Temperatura Mínima de trabalho Mín: -15ºC
+Garantia: 12 meses
+Curva de Performance Tipo de Terminal
+Especificações
+Modelo da 12MVA- 7
+Bateria
+Vida útil
+(anos) 5
+Capacidade C₂₀ C₁₀ C₅ C₁
+(Ah/25⁰C) 7 6.5 6.35 4.53
+Comprimento Largura Altura Altura Total
+Dimensões (mm)
+151 65 94 98
+Peso aproximado
+(Kg) 2.1
+Resistência Interna
+(mΩ) 30
+Máxima Corrente
+de Descarga 105
+Tensão de Tensão de ciclagem Tensão de Flutuação
+Recarga 2.45 (-4mV/⁰C) 2.27 (-3mV/⁰C)
+Corrente de
+recarga máxima 2.1 A
+Acumuladores Moura I Matriz Escritório Central
+Rua – Diário de Pernambuco, 195 Edson Mororó Moura. Rua Hermínio Alvez de Queiroz, 65 Piedade
+55150-615 Belo Jardim – PE Brasil 54400-230 Jaboatão dos Guararapes-PE Brasil
+Fone: 81 3411.1000 Fax: 81 3411.2999 Fone: 81 2121.1600 Fax: 81 2121.1644
+Corrente de Descarga (25°C, A)
+Potência de Descarga (25°C, W/cell)
+Acumuladores Moura I Matriz Escritório Central
+Rua – Diário de Pernambuco, 195 Edson Mororó Moura. Rua Hermínio Alvez de Queiroz, 65 Piedade
+55150-615 Belo Jardim – PE Brasil 54400-230 Jaboatão dos Guararapes-PE Brasil
+Fone: 81 3411.1000 Fax: 81 3411.2999 Fone: 81 2121.1600 Fax: 81 2121.1644
