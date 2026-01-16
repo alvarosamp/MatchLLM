@@ -1,0 +1,120 @@
+{
+  "produto_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/produtos/Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf",
+  "produto_text_len": 1552,
+  "edital_text_len": 168703,
+  "produto_json": {
+    "nome": "",
+    "tipo_produto": "eletrônico",
+    "atributos": {
+      "documentacao_tecnica": {
+        "valor": 1,
+        "unidade": "bool"
+      },
+      "conformidade_normas": {
+        "valor": 1,
+        "unidade": "bool"
+      }
+    }
+  },
+  "edital_json": {
+    "item": null,
+    "tipo_produto": null,
+    "requisitos": {
+      "req_1": {
+        "valor_min": null,
+        "valor_max": null,
+        "unidade": null,
+        "obrigatorio": true,
+        "texto": "3 Disco Rígido: Padrão Hd SSD M.2 Nvme; de No Mínimo 240 Gb e UND 50"
+      },
+      "req_2": {
+        "valor_min": null,
+        "valor_max": null,
+        "unidade": null,
+        "obrigatorio": true,
+        "texto": "Máximo 256 Gb de Armazenamento; para Slots/tamanho M.2 2280;"
+      },
+      "req_3": {
+        "valor_min": null,
+        "valor_max": null,
+        "unidade": null,
+        "obrigatorio": true,
+        "texto": "Garantia de No Mínimo 12 Meses; Com Leitura Mínima: 1.500"
+      },
+      "req_4": {
+        "valor_min": null,
+        "valor_max": null,
+        "unidade": null,
+        "obrigatorio": true,
+        "texto": "§ 1º O motivo determinante para a revogação do processo licitatório deverá ser resultante de fato"
+      },
+      "req_5": {
+        "valor_min": null,
+        "valor_max": null,
+        "unidade": null,
+        "obrigatorio": true,
+        "texto": "§ 2º Nos casos de anulação e revogação, deverá ser assegurada a prévia manifestação dos"
+      }
+    }
+  },
+  "matching": {
+    "req_1": "NAO_ATENDE",
+    "req_2": "NAO_ATENDE",
+    "req_3": "DUVIDA",
+    "req_4": "DUVIDA",
+    "req_5": "DUVIDA"
+  },
+  "score": {
+    "score_percent": 0.0,
+    "obrigatorios_total": 5,
+    "obrigatorios_atende": 0,
+    "obrigatorios_nao_atende": 2,
+    "obrigatorios_duvida": 3,
+    "opcionais_total": 0,
+    "opcionais_atende": 0,
+    "opcionais_nao_atende": 0,
+    "opcionais_duvida": 0,
+    "status_geral": "REPROVADO"
+  },
+  "justificativas": {
+    "req_1": "O produto não atende às exigências mínimas de armazenamento e velocidade necessárias para a execução eficiente dos requisitos.",
+    "req_2": "A quantidade máxima de armazenamento permitida é inferior à exigência, o que compromete a viabilidade do produto.",
+    "req_3": "O tempo de leitura recomendado não está dentro da escala mínima proposta pelo Edital.",
+    "req_4": "A garantia mínima de 12 meses não está alinhada com as necessidades específicas dos requisitos.",
+    "req_5": "A anulação e revogação do processo licitatório são processos que podem ser complexos e demorados, o que pode afetar a eficiência da gestão pública."
+  },
+  "mapping_llm": {
+    "req_1": {
+      "matched_attribute": null,
+      "status_hint": "NAO_ATENDE",
+      "rationale": "O requisito é técnico (armazenamento/SSD) e o produto não trouxe atributos de capacidade/velocidade para comprovar atendimento.",
+      "confidence": 0.55
+    },
+    "req_2": {
+      "matched_attribute": null,
+      "status_hint": "NAO_ATENDE",
+      "rationale": "O requisito é técnico (armazenamento/SSD) e o produto não trouxe atributos de capacidade/velocidade para comprovar atendimento.",
+      "confidence": 0.55
+    },
+    "req_3": {
+      "matched_attribute": null,
+      "status_hint": "DUVIDA",
+      "rationale": "Requisito genérico sem mapeamento determinístico para atributos disponíveis.",
+      "confidence": 0.4
+    },
+    "req_4": {
+      "matched_attribute": null,
+      "status_hint": "DUVIDA",
+      "rationale": "Trecho aparenta ser regra administrativa do edital (não especificação técnica do item).",
+      "confidence": 0.5
+    },
+    "req_5": {
+      "matched_attribute": null,
+      "status_hint": "DUVIDA",
+      "rationale": "Trecho aparenta ser regra administrativa do edital (não especificação técnica do item).",
+      "confidence": 0.5
+    }
+  },
+  "note": "SIMULACAO: JSONs injetados (sem Gemini)."
+}

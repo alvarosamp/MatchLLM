@@ -1,6 +1,12 @@
 import pdfplumber
 import os
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Optional deps (present only in some environments)
+    import google.generativeai  # type: ignore
+    import doctr  # type: ignore
 
 class PDFExtractor:
     """
@@ -64,15 +70,30 @@ class PDFExtractor:
         
     def extract_text_ocr(self, pdf_path: str) -> str:
         """
-        Extrai o texto de pdf escaneados usando ocr
-        Retorna o texto extraido
+        Extrai o texto de pdf escaneados usando OCR local.
+
+        Backend padrão: PaddleOCR (idioma pt).
+        Fallback: python-doctr (se instalado).
         """
+        # 1) PaddleOCR (preferencial)
         try:
-            from doctr.io import DocumentFile
-            from doctr.models import ocr_predictor
+            from PaddleOCr.paddle_ocr_extractor import PaddleOCRExtractor
+
+            dpi = int(os.getenv("PADDLEOCR_DPI", "300"))
+            ex = PaddleOCRExtractor()
+            return ex.extract_pdf_text(pdf_path, dpi=dpi)
+        except Exception as e:
+            # Mantém motivo para debug; cai para fallback
+            raise RuntimeError(f"PaddleOCR falhou/indisponível: {repr(e)}")
+
+    def extract_text_doctr(self, pdf_path: str) -> str:
+        """Fallback OCR: python-doctr (antigo backend local)."""
+        try:
+            from doctr.io import DocumentFile  # type: ignore
+            from doctr.models import ocr_predictor  # type: ignore
         except ImportError:
             raise RuntimeError(
-                "OCR não disponível: instale 'python-doctr' e dependências (torch/torchvision)."
+                "OCR (doctr) não disponível: instale 'python-doctr' e dependências (torch/torchvision)."
             )
 
         if self.ocr_model is None:
@@ -92,11 +113,11 @@ class PDFExtractor:
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY/GOOGLE_API_KEY não definida para OCR com Gemini.")
         try:
-            import google.generativeai as genai
+            import google.generativeai as genai  # type: ignore
         except ImportError as e:
             raise RuntimeError("Pacote 'google-generativeai' não instalado. Adicione ao requirements.txt e instale.") from e
 
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=api_key)  # type: ignore[attr-defined]
         # Tenta múltiplos nomes de modelos para compatibilidade com versões da API
         preferred = os.getenv("GEMINI_OCR_MODEL", "").strip()
         base_candidates = [
@@ -132,7 +153,7 @@ class PDFExtractor:
         for name in candidates:
             try:
                 print(f"[{label}] Tentando modelo Gemini: {name}")
-                model = genai.GenerativeModel(name)
+                model = genai.GenerativeModel(name)  # type: ignore[attr-defined]
                 # Checagem mínima: tenta um prompt trivial sem arquivo (não executa geração pesada)
                 _ = getattr(model, "model_name", name)
                 print(f"[{label}] Modelo Gemini selecionado: {name}")
@@ -145,11 +166,11 @@ class PDFExtractor:
             raise RuntimeError(f"Nenhum modelo Gemini válido encontrado. Último erro: {last_err}")
 
         # Faz upload do arquivo UMA vez e aguarda processamento
-        uploaded = genai.upload_file(pdf_path)
+        uploaded = genai.upload_file(pdf_path)  # type: ignore[attr-defined]
         try:
             while getattr(uploaded, "state", None) and getattr(uploaded.state, "name", "") == "PROCESSING":
                 time.sleep(1)
-                uploaded = genai.get_file(uploaded.name)
+                uploaded = genai.get_file(uploaded.name)  # type: ignore[attr-defined]
         except Exception:
             pass
 
@@ -168,7 +189,7 @@ class PDFExtractor:
         for name in candidates:
             try:
                 print(f"[{label}] Gerando conteúdo com modelo Gemini: {name}")
-                model = genai.GenerativeModel(name)
+                model = genai.GenerativeModel(name)  # type: ignore[attr-defined]
                 resp = model.generate_content([prompt, uploaded])
                 # Extrai texto das propriedades possíveis
                 txt = getattr(resp, "text", None)
@@ -243,63 +264,44 @@ class PDFExtractor:
                 self.last_meta["errors"].append("native_low_quality")
             except Exception:
                 pass
-        # Sem texto nativo, tenta OCR se disponível
-        # 1) tenta OCR local (python-doctr). Se não estiver instalado e houver credenciais Gemini/Google,
-        #    tenta usar o OCR via Gemini como fallback automático.
+        # Sem texto nativo, tenta OCR local.
+        # 1) PaddleOCR (padrão). Se falhar, tenta Doctr (se instalado).
+        # 2) Gemini só entra se for forçado via OCR_FORCE_GEMINI=1.
         try:
             txt = self.extract_text_ocr(pdf_path)
             self.last_meta["ocr_quality"] = self._text_quality(txt)
             if self._is_usable_text(txt):
-                self.last_meta["method"] = "doctr"
+                self.last_meta["method"] = "paddleocr"
                 return txt
-            # Se OCR local for baixa qualidade e houver chave Gemini, tenta Gemini.
+            # baixa qualidade: tenta fallback doctr
             try:
-                self.last_meta["errors"].append("doctr_low_quality")
+                self.last_meta["errors"].append("paddleocr_low_quality")
             except Exception:
                 pass
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-            if api_key:
+            try:
+                txt_d = self.extract_text_doctr(pdf_path)
+                self.last_meta["doctr_quality"] = self._text_quality(txt_d)
+                if self._is_usable_text(txt_d):
+                    self.last_meta["method"] = "doctr"
+                    return txt_d
                 try:
-                    print("PDFExtractor: OCR local baixa qualidade; tentando OCR via Gemini...")
-                    txt2 = self.extract_text_gemini(pdf_path, log_label=label)
-                    self.last_meta["method"] = "gemini_after_doctr"
-                    self.last_meta["used_gemini"] = True
-                    self.last_meta["gemini_quality"] = self._text_quality(txt2)
-                    return txt2
-                except Exception as e2:
-                    print(f"Falha no OCR via Gemini: {e2}")
-                    try:
-                        self.last_meta["errors"].append(f"gemini_after_doctr_failed: {e2}")
-                    except Exception:
-                        pass
-            self.last_meta["method"] = "doctr_low_quality"
+                    self.last_meta["errors"].append("doctr_low_quality")
+                except Exception:
+                    pass
+            except Exception as e2:
+                try:
+                    self.last_meta["errors"].append(f"doctr_failed: {e2}")
+                except Exception:
+                    pass
+
+            self.last_meta["method"] = "paddleocr_low_quality"
             return txt
         except RuntimeError as e:
             msg = str(e)
             print(msg)
             try:
-                self.last_meta["errors"].append(f"doctr_failed: {msg}")
+                self.last_meta["errors"].append(f"ocr_failed: {msg}")
             except Exception:
                 pass
-            # Se houver chave Gemini/Google, tenta usar o método Gemini
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-            if api_key:
-                try:
-                    print("PDFExtractor: tentando OCR via Gemini como fallback...")
-                    txt = self.extract_text_gemini(pdf_path, log_label=label)
-                    self.last_meta["method"] = "gemini_fallback"
-                    self.last_meta["used_gemini"] = True
-                    try:
-                        self.last_meta["gemini_quality"] = self._text_quality(txt)
-                    except Exception:
-                        pass
-                    return txt
-                except Exception as e2:
-                    print(f"Falha no OCR via Gemini: {e2}")
-                    try:
-                        self.last_meta["errors"].append(f"gemini_fallback_failed: {e2}")
-                    except Exception:
-                        pass
-                    return ""
             self.last_meta["method"] = "none"
             return ""
