@@ -31,10 +31,13 @@ def send_email(
 
     host = os.getenv("SMTP_HOST")
     port = int(os.getenv("SMTP_PORT", "587"))
-    user = os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASSWORD")
+    user = (os.getenv("SMTP_USER") or "").strip() or None
+    password_raw = os.getenv("SMTP_PASSWORD") or ""
+    # Gmail App Password costuma vir com espaços (xxxx xxxx xxxx xxxx). Removemos espaços.
+    password = password_raw.replace(" ", "").strip() or None
     use_tls = os.getenv("SMTP_TLS", "1") not in {"0", "false", "False"}
-    from_email = os.getenv("SMTP_FROM") or user
+    use_ssl = os.getenv("SMTP_SSL", "0") not in {"0", "false", "False"}
+    from_email = (os.getenv("SMTP_FROM") or user or "").strip() or None
 
     if not host or not from_email:
         raise RuntimeError("SMTP não configurado (defina SMTP_HOST/SMTP_USER/SMTP_PASSWORD)")
@@ -50,8 +53,13 @@ def send_email(
             maintype, subtype = (mime.split("/", 1) + ["octet-stream"])[:2]
             msg.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
 
-    with smtplib.SMTP(host, port) as smtp:
-        if use_tls:
+    if use_ssl:
+        smtp_ctx = smtplib.SMTP_SSL(host, port)
+    else:
+        smtp_ctx = smtplib.SMTP(host, port)
+
+    with smtp_ctx as smtp:
+        if (not use_ssl) and use_tls:
             smtp.starttls()
         if user and password:
             smtp.login(user, password)

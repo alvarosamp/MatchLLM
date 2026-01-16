@@ -4,6 +4,9 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
 import Match from './pages/Match'
+import Editais from './pages/Editais'
+import Datasheet from './pages/Datasheet'
+import Dataset from './pages/Dataset'
 import { getToken } from './auth/token'
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -22,6 +25,30 @@ export default function App() {
         element={
           <Protected>
             <Home />
+          </Protected>
+        }
+      />
+      <Route
+        path="/editais"
+        element={
+          <Protected>
+            <Editais />
+          </Protected>
+        }
+      />
+      <Route
+        path="/datasheet"
+        element={
+          <Protected>
+            <Datasheet />
+          </Protected>
+        }
+      />
+      <Route
+        path="/dataset"
+        element={
+          <Protected>
+            <Dataset />
           </Protected>
         }
       />
