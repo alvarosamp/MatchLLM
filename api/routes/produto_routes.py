@@ -38,8 +38,7 @@ async def upload_produto(file: UploadFile = File(...), fabricante: str | None = 
     init_db()
 
     try:
-        # processar_datasheet expects: pdf_path, fabricante, modelo, gemini_client, db_session
-        # gemini_client not used here; pass None
+    # processar_datasheet expects: pdf_path, fabricante, modelo, db_session
         fabricante_val = fabricante or "desconhecido"
         modelo_val = modelo or dest_path.stem
         out = processar_datasheet(str(dest_path), fabricante_val, modelo_val, None, db)

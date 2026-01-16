@@ -93,13 +93,12 @@ def _safe_int(value: object, default: int = 0) -> int:
 def _summarize_ocr_meta(meta: object) -> dict:
     d = _normalize_ocr_meta(meta)
     if not isinstance(d, dict):
-        return {"method": None, "used_gemini": None, "chars": None, "words": None, "alnum_ratio": None, "errors": None}
-    q = d.get("native_quality") or d.get("ocr_quality") or d.get("gemini_quality") or {}
+        return {"method": None, "chars": None, "words": None, "alnum_ratio": None, "errors": None}
+    q = d.get("native_quality") or d.get("ocr_quality") or {}
     if not isinstance(q, dict):
         q = {}
     return {
         "method": d.get("method"),
-        "used_gemini": d.get("used_gemini"),
         "chars": q.get("chars"),
         "words": q.get("words"),
         "alnum_ratio": q.get("alnum_ratio"),
@@ -119,21 +118,35 @@ def _client_summary(result: dict) -> dict:
             "itens": [],
         }
 
-    score = result.get("score") if isinstance(result.get("score"), dict) else {}
-    matching = result.get("matching") if isinstance(result.get("matching"), dict) else {}
-    edital_json = result.get("edital_json") if isinstance(result.get("edital_json"), dict) else {}
-    produto_json = result.get("produto_json") if isinstance(result.get("produto_json"), dict) else {}
-    justificativas = result.get("justificativas") if isinstance(result.get("justificativas"), dict) else {}
-    debug = result.get("debug") if isinstance(result.get("debug"), dict) else {}
+    _score_raw = result.get("score")
+    score = _score_raw if isinstance(_score_raw, dict) else {}
 
-    reqs = edital_json.get("requisitos") if isinstance(edital_json.get("requisitos"), dict) else {}
-    attrs = produto_json.get("atributos") if isinstance(produto_json.get("atributos"), dict) else {}
+    _matching_raw = result.get("matching")
+    matching = _matching_raw if isinstance(_matching_raw, dict) else {}
+
+    _edital_raw = result.get("edital_json")
+    edital_json = _edital_raw if isinstance(_edital_raw, dict) else {}
+
+    _produto_raw = result.get("produto_json")
+    produto_json = _produto_raw if isinstance(_produto_raw, dict) else {}
+
+    _just_raw = result.get("justificativas")
+    justificativas = _just_raw if isinstance(_just_raw, dict) else {}
+
+    _debug_raw = result.get("debug")
+    debug = _debug_raw if isinstance(_debug_raw, dict) else {}
+
+    reqs_raw = edital_json.get("requisitos")
+    reqs = reqs_raw if isinstance(reqs_raw, dict) else {}
+
+    attrs_raw = produto_json.get("atributos")
+    attrs = attrs_raw if isinstance(attrs_raw, dict) else {}
 
     atende: list[str] = []
     nao_atende: list[str] = []
     duvida: list[str] = []
 
-    for k, stt in matching.items():
+    for k, stt in (matching or {}).items():
         if stt == "ATENDE":
             atende.append(k)
         elif stt == "NAO_ATENDE":
@@ -193,16 +206,16 @@ def _client_summary(result: dict) -> dict:
             {
                 "chave": k,
                 "status": matching.get(k),
-                "obrigatorio": req_obj.get("obrigatorio"),
+                "obrigatorio": (req_obj or {}).get("obrigatorio"),
                 "requisito": {
-                    "valor": req_obj.get("valor"),
-                    "valor_min": req_obj.get("valor_min"),
-                    "valor_max": req_obj.get("valor_max"),
-                    "unidade": req_obj.get("unidade"),
+                    "valor": (req_obj or {}).get("valor"),
+                    "valor_min": (req_obj or {}).get("valor_min"),
+                    "valor_max": (req_obj or {}).get("valor_max"),
+                    "unidade": (req_obj or {}).get("unidade"),
                 },
                 "produto": {
-                    "valor": prod_obj.get("valor"),
-                    "unidade": prod_obj.get("unidade"),
+                    "valor": (prod_obj or {}).get("valor"),
+                    "unidade": (prod_obj or {}).get("unidade"),
                 },
                 "justificativa": justificativas.get(k),
             }
@@ -210,16 +223,16 @@ def _client_summary(result: dict) -> dict:
 
     return {
         "status_geral": status_cliente,
-        "score_percent": score.get("score_percent"),
-        "obrigatorios_atende": score.get("obrigatorios_atende"),
-        "obrigatorios_total": score.get("obrigatorios_total"),
-        "obrigatorios_nao_atende": score.get("obrigatorios_nao_atende"),
-        "obrigatorios_duvida": score.get("obrigatorios_duvida"),
+        "score_percent": (score or {}).get("score_percent"),
+        "obrigatorios_atende": (score or {}).get("obrigatorios_atende"),
+        "obrigatorios_total": (score or {}).get("obrigatorios_total"),
+        "obrigatorios_nao_atende": (score or {}).get("obrigatorios_nao_atende"),
+        "obrigatorios_duvida": (score or {}).get("obrigatorios_duvida"),
         "principais": principais,
         # Meta completo do OCR (para auditoria / cliente). Pode vir como dict ou string JSON.
         "ocr": {
-            "edital": _normalize_ocr_meta(debug.get("ocr_edital")),
-            "produto": _normalize_ocr_meta(debug.get("ocr_produto")),
+            "edital": _normalize_ocr_meta((debug or {}).get("ocr_edital")),
+            "produto": _normalize_ocr_meta((debug or {}).get("ocr_produto")),
         },
         "atende": atende,
         "nao_atende": nao_atende,
@@ -308,13 +321,6 @@ def _normalize_ocr_meta(meta: object) -> dict | None:
     return meta if isinstance(meta, dict) else None
 
 
-def _meta_used_gemini(meta: object) -> bool:
-    d = _normalize_ocr_meta(meta)
-    if not isinstance(d, dict):
-        return False
-    return bool(d.get("used_gemini") or d.get("method") in {"gemini", "gemini_forced"})
-
-
 def _needs_refresh_produto(produto_json: object) -> bool:
     if not isinstance(produto_json, dict):
         return True
@@ -327,10 +333,6 @@ def _needs_refresh_edital(edital_json: object) -> bool:
         return True
     reqs = edital_json.get("requisitos")
     return not isinstance(reqs, dict) or len(reqs) == 0
-
-
-def _set_force_gemini_ocr(enabled: bool) -> None:
-    os.environ["OCR_FORCE_GEMINI"] = "1" if enabled else "0"
 
 
 def _pdf_extract(extractor: object, pdf_path: str, label: str | None) -> str:
@@ -421,12 +423,7 @@ with st.expander("Configurações (opcional)"):
     save_text = st.checkbox("Salvar textos extraídos (debug)", value=False)
     out_name = st.text_input("Nome do arquivo de saída", value="resultado_final.json")
 
-    gemini_key_present = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-    force_gemini_ocr = st.checkbox(
-        "Forçar OCR Gemini (se houver chave)",
-        value=gemini_key_present,
-        help="Se marcado, PDFs serão extraídos via Gemini OCR sempre que possível.",
-    )
+    st.caption("OCR: somente local (PaddleOCR / extração nativa).")
 
     always_ocr_edital = st.checkbox(
         "Sempre refazer OCR do edital ao executar",
@@ -473,7 +470,6 @@ if ocr_clicked:
         path.write_bytes(b)
         saved_produtos_ocr.append({"orig": uf.name, "path": path, "sha": sha, "bytes": b})
 
-    _set_force_gemini_ocr(bool(force_gemini_ocr and (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))))
     extractor = PDFExtractor()
 
     zip_parts: list[tuple[str, bytes]] = []
@@ -524,8 +520,6 @@ if run_clicked:
         os.environ["LLM_TIMEOUT_SECONDS"] = str(int(llm_timeout))
     except Exception:
         pass
-
-    _set_force_gemini_ocr(bool(force_gemini_ocr and (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))))
 
     total_runs = len(edital_pdfs) * len(produto_pdfs)
     if total_runs > 50:
@@ -731,37 +725,31 @@ if run_clicked:
                         except Exception:
                             pass
 
-                        # Refresh conservador: se veio vazio do cache ou não usou Gemini com 'forçar' habilitado.
-                        force_now = bool(force_gemini_ocr and (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")))
+                        # Refresh conservador (local): se veio vazio do cache, refaz extração 1x.
                         should_refresh_prod = (
                             produto["sha"] not in refreshed_produtos
                             and produto["path"].suffix.lower() != ".txt"
-                            and (_needs_refresh_produto(produto_json) or (force_now and not _meta_used_gemini(ocr_meta_prod)))
+                            and _needs_refresh_produto(produto_json)
                         )
                         if should_refresh_prod:
                             refreshed_produtos.add(produto["sha"])
-                            prev_force = os.getenv("OCR_FORCE_GEMINI", "0")
-                            try:
-                                _set_force_gemini_ocr(True)
-                                produto_text_raw = _pdf_extract(pipeline.pdf, str(produto["path"]), "produto")
-                                ocr_meta_prod = _normalize_ocr_meta(getattr(pipeline.pdf, "last_meta", None))
-                                produto_text = normalize_text(produto_text_raw or "")
-                                produto_json_new = pipeline.product_extractor.extract(produto_text)
+                            produto_text_raw = _pdf_extract(pipeline.pdf, str(produto["path"]), "produto")
+                            ocr_meta_prod = _normalize_ocr_meta(getattr(pipeline.pdf, "last_meta", None))
+                            produto_text = normalize_text(produto_text_raw or "")
+                            produto_json_new = pipeline.product_extractor.extract(produto_text)
 
-                                upsert_document_cache(
-                                    db,
-                                    doc_type="produto",
-                                    sha256=produto["sha"],
-                                    hint_key=f"v{CACHE_VERSION}",
-                                    original_name=produto["orig"],
-                                    extracted_json=produto_json_new or {},
-                                    meta_json={"ocr": ocr_meta_prod, "settings": settings, "refreshed": True},
-                                )
-                                if produto_json_new:
-                                    produto_json = produto_json_new
-                                prod_cache_hit = False
-                            finally:
-                                _set_force_gemini_ocr(prev_force == "1")
+                            upsert_document_cache(
+                                db,
+                                doc_type="produto",
+                                sha256=produto["sha"],
+                                hint_key=f"v{CACHE_VERSION}",
+                                original_name=produto["orig"],
+                                extracted_json=produto_json_new or {},
+                                meta_json={"ocr": ocr_meta_prod, "settings": settings, "refreshed": True},
+                            )
+                            if produto_json_new:
+                                produto_json = produto_json_new
+                            prod_cache_hit = False
 
                         # 3) Cache do edital (hash + hint_key)
                         produto_hint = (
@@ -802,7 +790,8 @@ if run_clicked:
                                 except Exception:
                                     pass
 
-                            edital_json = pipeline._postprocess_edital_json(edital_json, produto_json)
+                            produto_json_dict = produto_json if isinstance(produto_json, dict) else {}
+                            edital_json = pipeline._postprocess_edital_json(edital_json, produto_json_dict)
 
                             # Log da extração do edital
                             try:
@@ -889,7 +878,8 @@ if run_clicked:
                                     except Exception:
                                         pass
 
-                                edital_json = pipeline._postprocess_edital_json(edital_json, produto_json)
+                                produto_json_dict = produto_json if isinstance(produto_json, dict) else {}
+                                edital_json = pipeline._postprocess_edital_json(edital_json, produto_json_dict)
 
                                 debug = {
                                     "ocr_edital": ocr_meta_edt,
@@ -925,79 +915,74 @@ if run_clicked:
                             except Exception:
                                 pass
 
-                        # Refresh conservador do edital (1x): se veio vazio do cache ou não usou Gemini com 'forçar' habilitado.
-                        force_now = bool(force_gemini_ocr and (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")))
+                        # Refresh conservador (local) do edital (1x): se veio vazio do cache, refaz extração 1x.
                         edt_refresh_key = f"{edital['sha']}|{hint_key}"
                         should_refresh_edt = (
                             edt_refresh_key not in refreshed_editais
                             and edital["path"].suffix.lower() != ".txt"
-                            and (_needs_refresh_edital(edital_json) or (force_now and not _meta_used_gemini(ocr_meta_edt)))
+                            and _needs_refresh_edital(edital_json)
                         )
                         if should_refresh_edt:
                             refreshed_editais.add(edt_refresh_key)
-                            prev_force = os.getenv("OCR_FORCE_GEMINI", "0")
-                            try:
-                                _set_force_gemini_ocr(True)
-                                edital_text_raw = _pdf_extract(pipeline.pdf, str(edital["path"]), "edital")
-                                ocr_meta_edt = _normalize_ocr_meta(getattr(pipeline.pdf, "last_meta", None))
-                                edital_text = normalize_text_preserve_newlines(edital_text_raw or "")
+                            edital_text_raw = _pdf_extract(pipeline.pdf, str(edital["path"]), "edital")
+                            ocr_meta_edt = _normalize_ocr_meta(getattr(pipeline.pdf, "last_meta", None))
+                            edital_text = normalize_text_preserve_newlines(edital_text_raw or "")
 
-                                edital_context, selected_chunks = pipeline._build_edital_context(edital_text, produto_hint)
-                                extract_strategy_eff = str(extract_strategy).strip().lower()
-                                fullscan_debug = {}
-                                if extract_strategy_eff == "fullscan":
-                                    edital_json_new, fullscan_debug = pipeline._extract_edital_fullscan(edital_text, produto_hint)
-                                else:
-                                    source_text = edital_context if edital_context else edital_text
-                                    edital_json_new = pipeline.edital_extractor.extract(source_text, produto_hint=produto_hint)
-                                    try:
-                                        reqs = edital_json_new.get("requisitos") if isinstance(edital_json_new, dict) else None
-                                        if (
-                                            isinstance(reqs, dict)
-                                            and len(reqs) == 0
-                                            and edital_context
-                                            and edital_text
-                                            and edital_text != edital_context
-                                        ):
-                                            edital_json_new = pipeline.edital_extractor.extract(edital_text, produto_hint=produto_hint)
-                                    except Exception:
-                                        pass
+                            edital_context, selected_chunks = pipeline._build_edital_context(edital_text, produto_hint)
+                            extract_strategy_eff = str(extract_strategy).strip().lower()
+                            fullscan_debug = {}
+                            if extract_strategy_eff == "fullscan":
+                                edital_json_new, fullscan_debug = pipeline._extract_edital_fullscan(edital_text, produto_hint)
+                            else:
+                                source_text = edital_context if edital_context else edital_text
+                                edital_json_new = pipeline.edital_extractor.extract(source_text, produto_hint=produto_hint)
+                                try:
+                                    reqs = edital_json_new.get("requisitos") if isinstance(edital_json_new, dict) else None
+                                    if (
+                                        isinstance(reqs, dict)
+                                        and len(reqs) == 0
+                                        and edital_context
+                                        and edital_text
+                                        and edital_text != edital_context
+                                    ):
+                                        edital_json_new = pipeline.edital_extractor.extract(edital_text, produto_hint=produto_hint)
+                                except Exception:
+                                    pass
 
-                                    try:
-                                        reqs2 = edital_json_new.get("requisitos") if isinstance(edital_json_new, dict) else None
-                                        if extract_strategy_eff == "rag_then_full" and isinstance(reqs2, dict) and len(reqs2) == 0:
-                                            edital_json_new, fullscan_debug = pipeline._extract_edital_fullscan(edital_text, produto_hint)
-                                    except Exception:
-                                        pass
+                                try:
+                                    reqs2 = edital_json_new.get("requisitos") if isinstance(edital_json_new, dict) else None
+                                    if extract_strategy_eff == "rag_then_full" and isinstance(reqs2, dict) and len(reqs2) == 0:
+                                        edital_json_new, fullscan_debug = pipeline._extract_edital_fullscan(edital_text, produto_hint)
+                                except Exception:
+                                    pass
 
-                                edital_json_new = pipeline._postprocess_edital_json(edital_json_new, produto_json)
-                                if edital_json_new:
-                                    edital_json = edital_json_new
+                            produto_json_dict = produto_json if isinstance(produto_json, dict) else {}
+                            edital_json_new = pipeline._postprocess_edital_json(edital_json_new, produto_json_dict)
+                            if edital_json_new:
+                                edital_json = edital_json_new
 
-                                debug = {
-                                    "ocr_edital": ocr_meta_edt,
-                                    "edital_chunks_usados": len(selected_chunks),
-                                    "edital_extract_strategy": extract_strategy_eff,
-                                    **(fullscan_debug or {}),
-                                }
-                                upsert_document_cache(
-                                    db,
-                                    doc_type="edital",
-                                    sha256=edital["sha"],
-                                    hint_key=hint_key,
-                                    original_name=edital["orig"],
-                                    extracted_json=edital_json_new or {},
-                                    meta_json={
-                                        "ocr": ocr_meta_edt,
-                                        "debug": debug,
-                                        "settings": settings,
-                                        "hint_key": hint_key,
-                                        "refreshed": True,
-                                    },
-                                )
-                                edt_cache_hit = False
-                            finally:
-                                _set_force_gemini_ocr(prev_force == "1")
+                            debug = {
+                                "ocr_edital": ocr_meta_edt,
+                                "edital_chunks_usados": len(selected_chunks),
+                                "edital_extract_strategy": extract_strategy_eff,
+                                **(fullscan_debug or {}),
+                            }
+                            upsert_document_cache(
+                                db,
+                                doc_type="edital",
+                                sha256=edital["sha"],
+                                hint_key=hint_key,
+                                original_name=edital["orig"],
+                                extracted_json=edital_json_new or {},
+                                meta_json={
+                                    "ocr": ocr_meta_edt,
+                                    "debug": debug,
+                                    "settings": settings,
+                                    "hint_key": hint_key,
+                                    "refreshed": True,
+                                },
+                            )
+                            edt_cache_hit = False
 
                         # 4) Agora roda só o determinístico + justificativas (sem OCR/extraction)
                         debug2 = {
@@ -1017,8 +1002,8 @@ if run_clicked:
                             pass
 
                         result = pipeline.run_with_extracted(
-                            edital_json=edital_json,
-                            produto_json=produto_json,
+                            edital_json=edital_json if isinstance(edital_json, dict) else {},
+                            produto_json=produto_json if isinstance(produto_json, dict) else {},
                             edital_pdf_path=str(edital["path"]),
                             produto_pdf_path=str(produto["path"]),
                             debug=debug2,
@@ -1040,12 +1025,13 @@ if run_clicked:
                     except Exception:
                         pass
 
-                    score = result.get("score") if isinstance(result, dict) else {}
+                    score_raw = result.get("score") if isinstance(result, dict) else None
+                    score = score_raw if isinstance(score_raw, dict) else {}
                     row = {
                         "edital": edital["orig"],
                         "produto": produto["orig"],
-                        "status_geral": score.get("status_geral"),
-                        "score_percent": score.get("score_percent"),
+                        "status_geral": (score or {}).get("status_geral"),
+                        "score_percent": (score or {}).get("score_percent"),
                     }
                     results.append(
                         {
@@ -1062,7 +1048,7 @@ if run_clicked:
                         )
                         out_path = RESULTS_DIR / _safe_filename(base_name)
                         try:
-                            MatchPipeline.save_result(result, str(out_path))
+                            MatchPipeline.save_result(result if isinstance(result, dict) else {}, str(out_path))
                         except Exception:
                             pass
                 except Exception as e:
@@ -1096,11 +1082,13 @@ if run_clicked:
         # Resumo enxuto (cliente)
         resumo_cliente = []
         for rec in results:
+            res_obj = rec.get("result") if isinstance(rec, dict) else None
+            res_dict = res_obj if isinstance(res_obj, dict) else {}
             resumo_cliente.append(
                 {
                     "edital": rec.get("edital_file"),
                     "produto": rec.get("produto_file"),
-                    **_client_summary(rec.get("result") if isinstance(rec, dict) else {}),
+                    **_client_summary(res_dict),
                 }
             )
         zf.writestr(
@@ -1198,8 +1186,8 @@ if run_clicked:
                     ocr_payload = resumo.get("ocr") if isinstance(resumo.get("ocr"), dict) else None
                     if not isinstance(ocr_payload, dict):
                         ocr_payload = {
-                            "edital": _normalize_ocr_meta(dbg.get("ocr_edital")),
-                            "produto": _normalize_ocr_meta(dbg.get("ocr_produto")),
+                            "edital": _normalize_ocr_meta((dbg or {}).get("ocr_edital")),
+                            "produto": _normalize_ocr_meta((dbg or {}).get("ocr_produto")),
                         }
 
                     ocr_edital = ocr_payload.get("edital") if isinstance(ocr_payload, dict) else None

@@ -103,7 +103,21 @@ def _default_sqlite_url() -> str:
 
 
 # Prioriza DATABASE_URL (Docker/Postgres). Se não existir, cai para SQLite local.
-DATABASE_URL = os.getenv("DATABASE_URL") or _default_sqlite_url()
+# Se vier configurado com host "postgres" (típico do docker-compose), mas estamos rodando
+# localmente fora do Docker, isso normalmente quebra (hostname não resolvido). Nesses casos,
+# fazemos fallback automático para SQLite para o app "simplesmente funcionar".
+_env_database_url = os.getenv("DATABASE_URL")
+if _env_database_url and "@postgres" in _env_database_url:
+    try:
+        logger.warning(
+            "DATABASE_URL aponta para host 'postgres' (docker-compose). Usando SQLite local em vez disso. DATABASE_URL=%s",
+            _env_database_url,
+        )
+    except Exception:
+        pass
+    DATABASE_URL = _default_sqlite_url()
+else:
+    DATABASE_URL = _env_database_url or _default_sqlite_url()
 
 try:
     logger.info("DATABASE_URL=%s", DATABASE_URL)
@@ -119,4 +133,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     # create tables
-    Base.metadata.create_all(bind=engine)
+    # Em modo local (sem Docker), é comum o DATABASE_URL vir de variáveis de ambiente
+    # antigas apontando para o host "postgres". Isso quebra o boot do Streamlit.
+    # Preferimos não derrubar a aplicação por causa do banco: se não consegue conectar,
+    # seguimos sem cache persistente.
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        try:
+            logger.warning("init_db(): skipping database init due to connection error: %s", e)
+        except Exception:
+            pass

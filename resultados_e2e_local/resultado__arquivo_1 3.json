@@ -1,6 +1,6 @@
 {
   "produto_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/produtos/Produto36334IdArquivo15589.pdf",
-  "edital_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf",
+  "edital_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/arquivo_1 3.pdf",
   "produto_json": {
     "nome": null,
     "tipo_produto": null,
@@ -25,9 +25,6 @@
         "valor": 2.1,
         "unidade": "kg"
       }
-    },
-    "_meta": {
-      "llm_error": "Não foi possível conectar ao LLM. Tentativas: http://ollama:11434, http://127.0.0.1:11434, http://localhost:11434. Verifique se o Ollama está em execução."
     }
   },
   "edital_json": {
@@ -35,37 +32,37 @@
     "tipo_produto": null,
     "requisitos": {
       "tensao_v": {
-        "valor_min": 12.0,
+        "valor_min": 240.0,
         "valor_max": null,
         "unidade": "V",
         "obrigatorio": true
       },
       "capacidade_ah": {
-        "valor_min": 9.0,
-        "valor_max": 9.0,
+        "valor_min": 7.0,
+        "valor_max": 7.0,
         "unidade": "Ah",
         "obrigatorio": true
       }
     },
     "_meta": {
-      "llm_error": "Não foi possível conectar ao LLM. Tentativas: http://ollama:11434, http://127.0.0.1:11434, http://localhost:11434. Verifique se o Ollama está em execução."
+      "llm_skipped": true
     }
   },
   "matching": {
-    "tensao_v": "ATENDE",
+    "tensao_v": "NAO_ATENDE",
     "capacidade_ah": "ATENDE"
   },
   "score": {
-    "score_percent": 100.0,
+    "score_percent": 50.0,
     "obrigatorios_total": 2,
-    "obrigatorios_atende": 2,
-    "obrigatorios_nao_atende": 0,
+    "obrigatorios_atende": 1,
+    "obrigatorios_nao_atende": 1,
     "obrigatorios_duvida": 0,
     "opcionais_total": 0,
     "opcionais_atende": 0,
     "opcionais_nao_atende": 0,
     "opcionais_duvida": 0,
-    "status_geral": "APROVADO",
+    "status_geral": "REPROVADO",
     "key_requirements": {
       "configured": [],
       "present_in_edital": [],
@@ -75,7 +72,7 @@
       "nao_atende": 0,
       "duvida": 0,
       "override_applied": false,
-      "base_status": "APROVADO"
+      "base_status": "REPROVADO"
     },
     "sequence_filter": {
       "configured": [],
@@ -86,20 +83,20 @@
     }
   },
   "justificativas": {
-    "tensao_v": "ATENDE pela regra de comparação (esperado >= 12.0 V; observado: 12.0 V).",
-    "capacidade_ah": "ATENDE pela regra de comparação (esperado = 9.0 Ah; observado: 7.0 Ah).",
-    "_global": "Status geral: APROVADO. Score: 100.0%."
+    "tensao_v": "NAO_ATENDE pela comparação (esperado >= 240.0 V; observado: 12.0 V).",
+    "capacidade_ah": "ATENDE pela regra de comparação (esperado = 7.0 Ah; observado: 7.0 Ah).",
+    "_global": "Status geral: REPROVADO. Score: 50.0%."
   },
   "debug": {
     "ocr_edital": {
-      "pdf_path": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf",
+      "pdf_path": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/arquivo_1 3.pdf",
       "method": "native",
       "native_text": true,
       "errors": [],
       "native_quality": {
-        "chars": 168704,
-        "words": 25155,
-        "alnum_ratio": 0.8057663125948407
+        "chars": 238033,
+        "words": 35325,
+        "alnum_ratio": 0.8072620182915814
       }
     },
     "ocr_produto": {
@@ -113,7 +110,7 @@
         "alnum_ratio": 0.7875080489375402
       }
     },
-    "edital_chunks_total": 66,
+    "edital_chunks_total": 94,
     "edital_chunks_usados": 20,
     "edital_extract_strategy": "rag_then_full"
   }

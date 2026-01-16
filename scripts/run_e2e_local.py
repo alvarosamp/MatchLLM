@@ -94,28 +94,41 @@ def _print_result_organized(result: Dict[str, Any]) -> None:
     edital_pdf = Path(str(result.get("edital_pdf") or ""))
     produto_pdf = Path(str(result.get("produto_pdf") or ""))
 
-    score = result.get("score") if isinstance(result.get("score"), dict) else {}
-    edital_json = result.get("edital_json") if isinstance(result.get("edital_json"), dict) else {}
-    produto_json = result.get("produto_json") if isinstance(result.get("produto_json"), dict) else {}
-    matching = result.get("matching") if isinstance(result.get("matching"), dict) else {}
-    just = result.get("justificativas") if isinstance(result.get("justificativas"), dict) else {}
+    _score_raw = result.get("score")
+    score = _score_raw if isinstance(_score_raw, dict) else {}
 
-    reqs = edital_json.get("requisitos") if isinstance(edital_json.get("requisitos"), dict) else {}
-    attrs = produto_json.get("atributos") if isinstance(produto_json.get("atributos"), dict) else {}
-    obrig_keys, opt_keys = _split_requirements(edital_json)
+    _edital_raw = result.get("edital_json")
+    edital_json = _edital_raw if isinstance(_edital_raw, dict) else {}
+
+    _produto_raw = result.get("produto_json")
+    produto_json = _produto_raw if isinstance(_produto_raw, dict) else {}
+
+    _matching_raw = result.get("matching")
+    matching = _matching_raw if isinstance(_matching_raw, dict) else {}
+
+    _just_raw = result.get("justificativas")
+    just = _just_raw if isinstance(_just_raw, dict) else {}
+
+    reqs_raw = edital_json.get("requisitos")
+    reqs = reqs_raw if isinstance(reqs_raw, dict) else {}
+
+    attrs_raw = produto_json.get("atributos")
+    attrs = attrs_raw if isinstance(attrs_raw, dict) else {}
+
+    obrig_keys, opt_keys = _split_requirements(edital_json if isinstance(edital_json, dict) else {})
 
     print("=" * 90)
     print("Edital :", edital_pdf.name)
     print("Produto:", produto_pdf.name)
-    print("Status geral:", score.get("status_geral"))
-    print("Score (%):", score.get("score_percent"))
+    print("Status geral:", (score or {}).get("status_geral"))
+    print("Score (%):", (score or {}).get("score_percent"))
     print(
         "Obrigatórios:",
-        f"{score.get('obrigatorios_atende')}/{score.get('obrigatorios_total')} (não={score.get('obrigatorios_nao_atende')}, dúvida={score.get('obrigatorios_duvida')})",
+        f"{(score or {}).get('obrigatorios_atende')}/{(score or {}).get('obrigatorios_total')} (não={(score or {}).get('obrigatorios_nao_atende')}, dúvida={(score or {}).get('obrigatorios_duvida')})",
     )
     print(
         "Opcionais:",
-        f"{score.get('opcionais_atende')}/{score.get('opcionais_total')} (não={score.get('opcionais_nao_atende')}, dúvida={score.get('opcionais_duvida')})",
+        f"{(score or {}).get('opcionais_atende')}/{(score or {}).get('opcionais_total')} (não={(score or {}).get('opcionais_nao_atende')}, dúvida={(score or {}).get('opcionais_duvida')})",
     )
     print(f"Requisitos extraídos: {len(reqs)} (obrigatórios={len(obrig_keys)}, opcionais={len(opt_keys)})")
 
@@ -173,9 +186,7 @@ def main() -> None:
         os.environ["LLM_MODEL"] = "llama3.2:1b"
     os.environ.setdefault("EMBED_BATCH_SIZE", "4")
 
-    # Por padrão, NÃO força OCR via Gemini para evitar rate-limit/quota.
-    # Para forçar, defina OCR_FORCE_GEMINI=1 no ambiente.
-    os.environ.setdefault("OCR_FORCE_GEMINI", "0")
+    # OCR é local (PaddleOCR / extração nativa). Não há mais fallback/força via Gemini.
 
     # Ajuda o Ollama a retornar JSON parseável nos extratores
     os.environ.setdefault("LLM_FORCE_JSON", "1")

@@ -1,6 +1,6 @@
 {
-  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\produtos\\Produto36334IdArquivo15589.pdf",
-  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\editais\\Edital_silverania.pdf",
+  "produto_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/produtos/Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/Edital_silverania.pdf",
   "produto_json": {
     "nome": null,
     "tipo_produto": null,
@@ -31,52 +31,10 @@
     "item": null,
     "tipo_produto": null,
     "requisitos": {
-      "garantia_meses": {
-        "valor_min": 12,
-        "valor_max": null,
-        "unidade": "meses",
-        "obrigatorio": true
-      },
       "tensao_v": {
         "valor_min": 250.0,
         "valor_max": null,
         "unidade": "V",
-        "obrigatorio": true
-      },
-      "corrente_a": {
-        "valor_min": 21.0,
-        "valor_max": 21.0,
-        "unidade": "A",
-        "obrigatorio": true
-      },
-      "potencia_w": {
-        "valor_min": 75.0,
-        "valor_max": 75.0,
-        "unidade": "W",
-        "obrigatorio": true
-      },
-      "memoria_ram_gb": {
-        "valor_min": 64.0,
-        "valor_max": null,
-        "unidade": "GB",
-        "obrigatorio": true
-      },
-      "armazenamento_gb": {
-        "valor_min": 64.0,
-        "valor_max": null,
-        "unidade": "GB",
-        "obrigatorio": true
-      },
-      "portas": {
-        "valor_min": 24,
-        "valor_max": 24,
-        "unidade": null,
-        "obrigatorio": true
-      },
-      "velocidade_gbps": {
-        "valor_min": 1.65,
-        "valor_max": 1.65,
-        "unidade": "Gbps",
         "obrigatorio": true
       }
     },
@@ -85,20 +43,13 @@
     }
   },
   "matching": {
-    "garantia_meses": "ATENDE",
-    "tensao_v": "NAO_ATENDE",
-    "corrente_a": "NAO_ATENDE",
-    "potencia_w": "NAO_ATENDE",
-    "memoria_ram_gb": "NAO_ATENDE",
-    "armazenamento_gb": "NAO_ATENDE",
-    "portas": "NAO_ATENDE",
-    "velocidade_gbps": "NAO_ATENDE"
+    "tensao_v": "NAO_ATENDE"
   },
   "score": {
-    "score_percent": 12.5,
-    "obrigatorios_total": 8,
-    "obrigatorios_atende": 1,
-    "obrigatorios_nao_atende": 7,
+    "score_percent": 0.0,
+    "obrigatorios_total": 1,
+    "obrigatorios_atende": 0,
+    "obrigatorios_nao_atende": 1,
     "obrigatorios_duvida": 0,
     "opcionais_total": 0,
     "opcionais_atende": 0,
@@ -125,21 +76,13 @@
     }
   },
   "justificativas": {
-    "garantia_meses": "ATENDE pela regra de comparação (esperado >= 12 meses; observado: 12 meses).",
     "tensao_v": "NAO_ATENDE pela comparação (esperado >= 250.0 V; observado: 12.0 V).",
-    "corrente_a": "NAO_ATENDE pela comparação (esperado = 21.0 A; observado: 2.1 A).",
-    "potencia_w": "NAO_ATENDE porque o produto não informou este atributo (esperado = 75.0 W).",
-    "memoria_ram_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado >= 64.0 GB).",
-    "armazenamento_gb": "NAO_ATENDE porque o produto não informou este atributo (esperado >= 64.0 GB).",
-    "portas": "NAO_ATENDE porque o produto não informou este atributo (esperado = 24).",
-    "velocidade_gbps": "NAO_ATENDE porque o produto não informou este atributo (esperado = 1.65 Gbps).",
-    "_global": "Status geral: REPROVADO. Score: 12.5%."
+    "_global": "Status geral: REPROVADO. Score: 0.0%."
   },
   "debug": {
     "ocr_edital": {
-      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\editais\\Edital_silverania.pdf",
+      "pdf_path": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/Edital_silverania.pdf",
       "method": "native",
-      "used_gemini": false,
       "native_text": true,
       "errors": [],
       "native_quality": {
@@ -149,9 +92,8 @@
       }
     },
     "ocr_produto": {
-      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\produtos\\Produto36334IdArquivo15589.pdf",
+      "pdf_path": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/produtos/Produto36334IdArquivo15589.pdf",
       "method": "native",
-      "used_gemini": false,
       "native_text": true,
       "errors": [],
       "native_quality": {

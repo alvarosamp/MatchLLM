@@ -162,52 +162,13 @@ def produto_from_datasheet(pdf: Path) -> dict:
         data1 = _parse_resp(resp1)
         if isinstance(data1, dict) and "atributos" in data1:
             miss1 = _missing_ratio(data1.get("atributos") or {})
-            # Se muitos campos ausentes e Gemini disponível, tenta OCR Gemini
-            use_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-            if miss1 >= 0.7 and use_gemini:
-                try:
-                    logger.info("[produto] Muitos campos ausentes (>=70%). Tentando OCR via Gemini...")
-                    extractor_g = PDFExtractor()
-                    raw_text2 = extractor_g.extract_text_gemini(str(pdf), log_label="doc")
-                    norm_text2 = normalize_text(raw_text2 or "")
-                    resp2 = pe.extract(norm_text2)
-                    data2 = _parse_resp(resp2)
-                    if isinstance(data2, dict) and "atributos" in data2:
-                        miss2 = _missing_ratio(data2.get("atributos") or {})
-                        if miss2 <= miss1:
-                            data1 = data2
-                            miss1 = miss2
-                            if os.getenv("RUNNER_VERBOSE"):
-                                logger.info("[produto] OCR Gemini melhorou preenchimento: %.0f%% ausentes", miss1*100)
-                except Exception as e2:
-                    logger.exception("[produto] OCR via Gemini falhou: %s", e2)
-
             return {
                 "nome": data1.get("nome") or pdf.stem,
                 "atributos": data1.get("atributos") or {},
                 "origem": pdf.name,
             }
     except Exception as e:
-        # Em erro do LLM, tenta OCR via Gemini e reexecuta a extração com LLM
-        use_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-        if use_gemini:
-            try:
-                logger.info("[produto] Extração via LLM falhou: %s. Tentando OCR via Gemini...", e)
-                raw_text2 = PDFExtractor().extract_text_gemini(str(pdf), log_label="doc")
-                norm_text2 = normalize_text(raw_text2 or "")
-                pe = ProductExtractor()
-                resp2 = pe.extract(norm_text2)
-                data2 = _parse_resp(resp2)
-                if isinstance(data2, dict) and "atributos" in data2:
-                    return {
-                        "nome": data2.get("nome") or pdf.stem,
-                        "atributos": data2.get("atributos") or {},
-                        "origem": pdf.name,
-                    }
-            except Exception as e2:
-                logger.exception("[produto] OCR via Gemini também falhou: %s", e2)
-        else:
-            logger.exception("[produto] Extração de atributos via LLM falhou: %s", e)
+        logger.exception("[produto] Extração de atributos via LLM falhou: %s", e)
 
     # Fallback simples
     return {
@@ -409,6 +370,7 @@ def run() -> None:
             print("".join(curl_parts))
 
         attempt = 0
+        r2 = None
         while True:
             try:
                 params = {"consulta": consulta}
@@ -455,7 +417,7 @@ def run() -> None:
                 # Tentar obter corpo de resposta para depuração
                 body_text = ""
                 try:
-                    body_text = r2.text  # r2 pode não existir em timeouts/conexão
+                    body_text = r2.text if r2 is not None else ""  # r2 pode não existir em timeouts/conexão
                 except Exception:
                     body_text = ""
                 # Mensagem específica se backend LLM está indisponível

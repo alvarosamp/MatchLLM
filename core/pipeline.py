@@ -24,13 +24,12 @@ def processar_datasheet(
     pdf_path: str,
     fabricante: str,
     modelo: str,
-    gemini_client,
-    db_session,
+    llm_client=None,
+    db_session=None,
 ) -> Dict[str, Any]:
     """
     Pipeline completo para processar um datasheet:
-    - OCR local
-    - fallback Gemini se OCR falhar
+    - OCR local (PaddleOCR via PDFExtractor/ocr_pdf)
     - extração de especificações técnicas
     - persistência com deduplicação
     """
@@ -40,8 +39,9 @@ def processar_datasheet(
     # 1. OCR
     raw_text = ocr_pdf(pdf_path)
 
-    # 2. Extração de specs com fallback
-    specs = extract_with_fallback(raw_text, gemini_client)
+    # 2. Extração de specs
+    # OBS: removido fallback Gemini; mantemos apenas parsing local.
+    specs = extract_with_fallback(raw_text, None)
 
     # 3. Persistência com deduplicação
     produto = get_or_create(
@@ -152,7 +152,7 @@ def _chunk_text(text: str, max_chars: int = 1200) -> list:
 
 
 def process_edital(pdf_path: str, edital_id: int) -> Dict[str, Any]:
-    """Processa o PDF do edital: extrai texto (native/OCR/Gemini), gera chunks e salva índice.
+    """Processa o PDF do edital: extrai texto (native/OCR local), gera chunks e salva índice.
 
     Retorna dict com edital_id e total_chunks.
     """
@@ -178,14 +178,7 @@ def process_edital(pdf_path: str, edital_id: int) -> Dict[str, Any]:
             extraction_log.append("ocr_doctr")
         except Exception as e:
             extraction_log.append(f"ocr_error: {e}")
-            # tenta Gemini como fallback
-            try:
-                texto_gemini = extractor.extract_text_gemini(str(pdf_path), log_label="doc")
-                texto = texto_gemini
-                extraction_log.append("gemini")
-            except Exception as e2:
-                extraction_log.append(f"gemini_error: {e2}")
-                texto = ""
+            texto = ""
     if not texto:
         print(f"[edital] Nenhum texto extraído do PDF {pdf_path}. Criando índice vazio.")
         chunks = []

@@ -43,15 +43,16 @@ class LLMClient:
 
     @staticmethod
     def _get_timeout():
-        # 180s por padrão: extrações podem demorar em PDFs grandes.
-        raw = os.getenv("LLM_TIMEOUT_SECONDS", "180")
+        # 600s por padrão: chamadas podem demorar bastante em PDFs grandes (OCR + RAG/fullscan).
+        # Ajuste via env LLM_TIMEOUT_SECONDS.
+        raw = os.getenv("LLM_TIMEOUT_SECONDS", "600")
         raw_s = str(raw or "").strip().lower()
         if raw_s in ("", "none", "null", "off", "false"):
             return None
         try:
             v = float(raw_s)
         except Exception:
-            return 180
+            return 600
         if v <= 0:
             return None
         return v

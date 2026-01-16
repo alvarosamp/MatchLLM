@@ -125,7 +125,7 @@ Isso reduz tempo e custo (principalmente chamadas ao LLM/OCR).
 
 SEGURANÇA / CHAVES
 
-- Evite commitar arquivos .env com chaves (GOOGLE_API_KEY/GEMINI_API_KEY).
+- Evite commitar arquivos .env com credenciais/senhas/tokens (ex.: SMTP_PASS).
 - Se você for compartilhar o projeto, remova/mascare essas chaves antes.
 
 

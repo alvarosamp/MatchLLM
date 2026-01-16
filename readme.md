@@ -2,7 +2,7 @@
 Pipeline para ingestão de editais PDF, extração de texto (OCR), chunking, geração de embeddings, indexação vetorial e matching de produtos usando RAG + LLM (Ollama).
 
 ### Principais componentes
-- `core/ocr`: extração de texto (PDF nativo + OCR via Doctr).
+- `core/ocr`: extração de texto (PDF nativo + OCR local via PaddleOCR; Doctr pode existir como fallback opcional).
 - `core/preprocess`: normalização, chunking, embeddings (SentenceTransformers).
 - `core/vectorstore`: índice FAISS serializado em disco.
 - `core/rag`: busca semântica e comparação via LLM.
@@ -18,7 +18,8 @@ Pipeline para ingestão de editais PDF, extração de texto (OCR), chunking, ger
 1) Criar venv e instalar deps
 ```bash
 python -m venv .venv
-.\n+venv\Scripts\activate
+source .venv/bin/activate  # macOS/Linux
+# Windows (PowerShell): .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 2) Baixar um modelo menor para evitar OOM na GPU (ex.: llama3.2:1b)

@@ -22,8 +22,5 @@
       "valor": 2.1,
       "unidade": "kg"
     }
-  },
-  "_meta": {
-    "llm_error": "Não foi possível conectar ao LLM. Tentativas: http://ollama:11434, http://127.0.0.1:11434, http://localhost:11434. Verifique se o Ollama está em execução."
   }
 }
