@@ -50,3 +50,16 @@ CREATE TABLE IF NOT EXISTS match_cache (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_match_cache_pair_settings
     ON match_cache (edital_sha256, produto_sha256, settings_sig);
+
+-- =========================
+-- AUTH
+-- =========================
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_users_email ON users (email);

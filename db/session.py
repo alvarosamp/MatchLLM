@@ -3,6 +3,11 @@ from pathlib import Path
 import time
 import logging
 
+try:
+    from dotenv import load_dotenv
+except Exception:
+    load_dotenv = None
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -17,6 +22,14 @@ logger = logging.getLogger(__name__)
 def _repo_root() -> Path:
     # db/session.py -> db/ -> repo root
     return Path(__file__).resolve().parents[1]
+
+
+# Carrega variáveis do `.env` na raiz do repo para execução local (fora do Docker).
+if load_dotenv is not None:
+    try:
+        load_dotenv(dotenv_path=_repo_root() / ".env", override=False)
+    except Exception:
+        pass
 
 
 def _default_sqlite_url() -> str:
@@ -102,8 +115,26 @@ def _default_sqlite_url() -> str:
     return url
 
 
-# Prioriza DATABASE_URL (Docker/Postgres). Se não existir, cai para SQLite local.
-DATABASE_URL = os.getenv("DATABASE_URL") or _default_sqlite_url()
+def _postgres_url_from_env() -> str | None:
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    db = os.getenv("POSTGRES_DB")
+    host = os.getenv("POSTGRES_HOST")
+    port = os.getenv("POSTGRES_PORT")
+
+    if not (user and password and db and host):
+        return None
+
+    port_val = port or "5432"
+    # SQLAlchemy URL format for psycopg2
+    return f"postgresql+psycopg2://{user}:{password}@{host}:{port_val}/{db}"
+
+
+# Prioriza DATABASE_URL. Se não existir e houver POSTGRES_* configurado, monta a URL.
+# Caso contrário, cai para SQLite local.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = _postgres_url_from_env() or _default_sqlite_url()
 
 try:
     logger.info("DATABASE_URL=%s", DATABASE_URL)

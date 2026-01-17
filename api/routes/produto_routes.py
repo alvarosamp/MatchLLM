@@ -9,7 +9,13 @@ from typing import Optional
 from db.repositories.produto_repo import get_or_create
 from db.models.produtos import Produto
 
-router = APIRouter(prefix="/produtos", tags=["Produtos"])
+from api.auth.deps import get_current_user
+
+router = APIRouter(
+    prefix="/produtos",
+    tags=["Produtos"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def get_db():

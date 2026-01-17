@@ -21,6 +21,12 @@ python -m venv .venv
 .\n+venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+2) Criar arquivo `.env`
+
+- Copie `.env.example` para `.env`
+- Ajuste `POSTGRES_*` (ou `DATABASE_URL`) para apontar para seu Postgres
+
 2) Baixar um modelo menor para evitar OOM na GPU (ex.: llama3.2:1b)
 ```bash
 ollama pull llama3.2:1b
@@ -34,6 +40,12 @@ ollama pull llama3.2:1b
 ```bash
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+### Banco de dados (Postgres vs SQLite)
+
+- Se `DATABASE_URL` estiver definido, ele será usado.
+- Se `POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB/POSTGRES_HOST` estiverem definidos, a URL do Postgres é montada automaticamente.
+- Se nada estiver definido, o backend cai para SQLite local em `data/matchllm.sqlite`.
 
 ### Executar Dashboard (Streamlit)
 ```bash

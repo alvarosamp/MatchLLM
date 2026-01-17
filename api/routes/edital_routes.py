@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import traceback
 import json
 from typing import List, Optional
@@ -11,7 +11,13 @@ from api.services.edital_service import (
     rodar_match_com_requisitos,
 )
 
-router = APIRouter(prefix="/editais", tags=["Editais"])
+from api.auth.deps import get_current_user
+
+router = APIRouter(
+    prefix="/editais",
+    tags=["Editais"],
+    dependencies=[Depends(get_current_user)],
+)
 
 from sqlalchemy.orm import Session
 
@@ -462,3 +468,33 @@ async def match_multiple(request: "MatchMultipleRequest", db: Session = Depends(
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha no match múltiplo: {e}")
+
+
+@router.post("/email")
+async def email_attachment(
+    to_email: str = Form(...),
+    subject: str = Form("MatchLLM - Resultado"),
+    body_text: str = Form("Segue o resultado em anexo."),
+    file: UploadFile = File(...),
+):
+    """Envia um anexo por email via SMTP (configurado por env vars).
+
+    Útil para o front-end exportar CSV/XLSX localmente e pedir para a API enviar.
+    """
+    if not is_valid_email(to_email):
+        raise HTTPException(status_code=400, detail="Email inválido")
+
+    filename = file.filename or "resultado"
+    content = await file.read()
+    mime = file.content_type or "application/octet-stream"
+
+    try:
+        send_email(
+            to_email=to_email,
+            subject=subject,
+            body_text=body_text,
+            attachments=[(filename, content, mime)],
+        )
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao enviar email: {e}")
