@@ -1,6 +1,6 @@
 {
-  "produto_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__Produto36334IdArquivo15589.pdf",
-  "edital_pdf": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__arquivo_1_3.pdf",
+  "produto_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/uploads/20260117_125953__Produto36334IdArquivo15589.pdf",
+  "edital_pdf": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/uploads/20260117_125953__arquivo_1_3.pdf",
   "produto_json": {
     "nome": null,
     "tipo_produto": null,
@@ -28,7 +28,7 @@
     "tipo_produto": null,
     "requisitos": {
       "tensao_v": {
-        "valor_min": 115.0,
+        "valor_min": 240.0,
         "valor_max": null,
         "unidade": "V",
         "obrigatorio": true
@@ -41,7 +41,7 @@
       }
     },
     "_meta": {
-      "llm_unparseable": true
+      "llm_error": "Não foi possível conectar ao LLM. Tentativas: http://ollama:11434, http://127.0.0.1:11434, http://localhost:11434. Verifique se o Ollama está em execução."
     }
   },
   "matching": {
@@ -79,21 +79,20 @@
     }
   },
   "justificativas": {
-    "tensao_v": "O valor do produto (12.0 V) não atende ao requisito de tensão, pois é menor que o valor mínimo permitido (115.0 V).",
-    "capacidade_ah": "O valor do produto (7.0 Ah) está dentro da faixa permitida (entre 7.0 e 7.0 Ah), portanto atende ao requisito.",
-    "_global": "O status final da comparação de produto vs edital é REPROVADO porque a política de verificação de requisitos-chave foi definida como \"all\", indicando que todos os requisitos devem ser atendidos. Nesse caso, apenas 1 dos 2 requisitos-chave (tensao_v) foi atendido, o que não é suficiente para aprovar a comparação."
+    "tensao_v": "NAO_ATENDE pela comparação (esperado >= 240.0 V; observado: 12.0 V).",
+    "capacidade_ah": "ATENDE pela regra de comparação (esperado = 7.0 Ah; observado: 7.0 Ah).",
+    "_global": "Status geral: REPROVADO. Score: 50.0%."
   },
   "debug": {
     "ocr_edital": {
-      "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__arquivo_1_3.pdf",
-      "method": "gemini_forced",
-      "used_gemini": true,
-      "native_text": false,
+      "pdf_path": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/uploads/20260117_125953__arquivo_1_3.pdf",
+      "method": "native",
+      "native_text": true,
       "errors": [],
-      "gemini_quality": {
-        "chars": 154359,
-        "words": 23047,
-        "alnum_ratio": 0.8079865767464158
+      "native_quality": {
+        "chars": 238033,
+        "words": 35325,
+        "alnum_ratio": 0.8072620182915814
       }
     },
     "ocr_produto": {
@@ -122,15 +121,14 @@
     "principais": [],
     "ocr": {
       "edital": {
-        "pdf_path": "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\uploads\\20260113_171501__arquivo_1_3.pdf",
-        "method": "gemini_forced",
-        "used_gemini": true,
-        "native_text": false,
+        "pdf_path": "/Users/alvarosamp/Documents/Projetos/MatchLLM/data/uploads/20260117_125953__arquivo_1_3.pdf",
+        "method": "native",
+        "native_text": true,
         "errors": [],
-        "gemini_quality": {
-          "chars": 154359,
-          "words": 23047,
-          "alnum_ratio": 0.8079865767464158
+        "native_quality": {
+          "chars": 238033,
+          "words": 35325,
+          "alnum_ratio": 0.8072620182915814
         }
       },
       "produto": {
@@ -163,7 +161,7 @@
           "valor": 7.0,
           "unidade": "Ah"
         },
-        "justificativa": "O valor do produto (7.0 Ah) está dentro da faixa permitida (entre 7.0 e 7.0 Ah), portanto atende ao requisito."
+        "justificativa": "ATENDE pela regra de comparação (esperado = 7.0 Ah; observado: 7.0 Ah)."
       },
       {
         "chave": "tensao_v",
@@ -171,7 +169,7 @@
         "obrigatorio": true,
         "requisito": {
           "valor": null,
-          "valor_min": 115.0,
+          "valor_min": 240.0,
           "valor_max": null,
           "unidade": "V"
         },
@@ -179,7 +177,7 @@
           "valor": 12.0,
           "unidade": "V"
         },
-        "justificativa": "O valor do produto (12.0 V) não atende ao requisito de tensão, pois é menor que o valor mínimo permitido (115.0 V)."
+        "justificativa": "NAO_ATENDE pela comparação (esperado >= 240.0 V; observado: 12.0 V)."
       }
     ]
   }

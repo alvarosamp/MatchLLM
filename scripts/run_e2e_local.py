@@ -186,7 +186,7 @@ def main() -> None:
         os.environ["LLM_MODEL"] = "llama3.2:1b"
     os.environ.setdefault("EMBED_BATCH_SIZE", "4")
 
-    # OCR é local (PaddleOCR / extração nativa). Não há mais fallback/força via Gemini.
+    # OCR é local (PaddleOCR / extração nativa). Não há mais fallback/força via serviços externos.
 
     # Ajuda o Ollama a retornar JSON parseável nos extratores
     os.environ.setdefault("LLM_FORCE_JSON", "1")

@@ -9,7 +9,7 @@ def extract_with_fallback(text: str, llm_client=None) -> dict:
 
     specs = extract_specs(text)
 
-    # Fallback via Gemini removido: mantemos apenas parsing local.
+    # Fallback de OCR remoto removido: mantemos apenas parsing local.
     # Se quiser melhorar a extração, ajuste o parser/heurísticas locais.
     if nan_ratio(specs) > 0.4:
         return specs

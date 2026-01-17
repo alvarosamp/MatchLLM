@@ -40,7 +40,7 @@ def processar_datasheet(
     raw_text = ocr_pdf(pdf_path)
 
     # 2. Extração de specs
-    # OBS: removido fallback Gemini; mantemos apenas parsing local.
+    # OBS: removido fallback de OCR remoto; mantemos apenas parsing local.
     specs = extract_with_fallback(raw_text, None)
 
     # 3. Persistência com deduplicação
