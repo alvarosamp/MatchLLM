@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth.routes import router as auth_router
 from api.routes import edital_routes
+from api.routes import match_routes
 from api.routes import produto_routes
 from db.session import init_db
 
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
 
     app.include_router(edital_routes.router)
+    app.include_router(match_routes.router)
     app.include_router(produto_routes.router)
 
     # initialize DB (development only)

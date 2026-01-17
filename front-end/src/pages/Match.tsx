@@ -12,20 +12,17 @@ type ProdutoRow = {
   criado_em?: string
 }
 
-type MatchMultipleRequest = {
-  produto: { nome: string; atributos: Record<string, any> }
-  edital_ids: number[]
-  consulta: string
-  model?: string | null
-  use_requisitos?: boolean
-  email?: string | null
-}
-
 type MatchMultipleResponse = {
   consulta?: string
   produto?: any
+  datasheet?: { name?: string; sha256?: string; cache_hit?: boolean }
+  editais?: Array<{ name?: string; sha256?: string }>
   results?: Array<{
-    edital_id: number
+    edital_id?: number
+    edital_name?: string
+    edital_sha256?: string
+    requisitos_cache_hit?: boolean
+    match_cache_hit?: boolean
     resumo_tecnico?: string
     resultado?: any
     error?: string
@@ -90,15 +87,12 @@ function statusLabel(raw: any): string {
 }
 
 export default function Match() {
-  const [produtos, setProdutos] = useState<ProdutoRow[] | null>(null)
-  const [produtoId, setProdutoId] = useState<string>('')
-  const [produtoNome, setProdutoNome] = useState('')
-  const [atributosJson, setAtributosJson] = useState('{"portas": 24, "poe": true}')
-  const [editalIds, setEditalIds] = useState('1')
-  const [consulta, setConsulta] = useState('switch 24 portas poe')
-  const [useRequisitos, setUseRequisitos] = useState(false)
+  const [datasheetFile, setDatasheetFile] = useState<File | null>(null)
+  const [editalFiles, setEditalFiles] = useState<File[]>([])
+  const [consulta, setConsulta] = useState('')
   const [email, setEmail] = useState('alvaroscareli@gmail.com')
   const [model, setModel] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [out, setOut] = useState<MatchMultipleResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -107,53 +101,25 @@ export default function Match() {
   const [minConfidence, setMinConfidence] = useState<number>(0)
   const [textQuery, setTextQuery] = useState<string>('')
 
-  async function loadProdutos() {
-    try {
-      const list = await apiFetch<ProdutoRow[]>('/produtos')
-      setProdutos(list)
-    } catch {
-      setProdutos(null)
-    }
-  }
-
-  React.useEffect(() => {
-    loadProdutos()
-  }, [])
-
-  function applySelectedProduto(pid: string, list: ProdutoRow[] | null) {
-    setProdutoId(pid)
-    if (!pid || !list) return
-    const found = list.find((p) => String(p.id) === pid)
-    if (!found) return
-    setProdutoNome(found.nome)
-    setAtributosJson(JSON.stringify(found.atributos_json ?? {}, null, 2))
-  }
-
   async function run() {
     setError(null)
     setOut(null)
     setLoading(true)
     try {
-      const attrs = JSON.parse(atributosJson)
-      const ids = editalIds
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => Number(s))
-        .filter((n) => Number.isFinite(n))
+      if (!datasheetFile) throw new Error('Selecione um PDF de datasheet.')
+      if (!editalFiles.length) throw new Error('Selecione pelo menos 1 PDF de edital.')
 
-      const payload: MatchMultipleRequest = {
-        produto: { nome: produtoNome || 'Produto', atributos: attrs },
-        edital_ids: ids,
-        consulta,
-        model: model.trim() || undefined,
-        use_requisitos: useRequisitos,
-        email: email.trim() || undefined
-      }
+      const form = new FormData()
+      form.append('datasheet', datasheetFile)
+      for (const f of editalFiles) form.append('editais', f)
+      if (showAdvanced && consulta.trim()) form.append('consulta', consulta.trim())
+      if (showAdvanced && model.trim()) form.append('model', model.trim())
+      // email aqui é opcional (o envio de email é feito pelos botões de export)
+      if (showAdvanced && email.trim()) form.append('email', email.trim())
 
-      const res = await apiFetch<MatchMultipleResponse>('/editais/match_multiple', {
+      const res = await apiFetch<MatchMultipleResponse>('/match/run', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: form
       })
       setOut(res)
     } catch (e: any) {
@@ -163,13 +129,17 @@ export default function Match() {
     }
   }
 
-  function buildRowsForEdital(r: { edital_id: number; resultado?: any }) {
+  function buildRowsForEdital(r: any) {
     const items = Array.isArray(r.resultado) ? (r.resultado as MatchItem[]) : []
+    const editalLabel = String(r.edital_name ?? r.edital_id ?? '—')
     return items.map((it) => {
       const evidence = toArray(it?.evidence).map((e) => String(e)).join(' | ')
       const missing = toArray(it?.missing_fields).map((m) => String(m)).join(', ')
       return {
-        edital_id: r.edital_id,
+        edital: editalLabel,
+        edital_sha256: String(r.edital_sha256 ?? ''),
+        requisitos_cache_hit: r.requisitos_cache_hit ? 'sim' : 'não',
+        match_cache_hit: r.match_cache_hit ? 'sim' : 'não',
         requisito: String(it?.requisito ?? ''),
         status: statusLabel(it?.status),
         confidence: fmtConfidence(it?.confidence),
@@ -212,7 +182,9 @@ export default function Match() {
     const rows = (out?.results ?? []).map((r) => {
       const resumo = calcResumo(r.resultado)
       return {
-        edital_id: r.edital_id,
+        edital: r.edital_name ?? String(r.edital_id ?? ''),
+        requisitos_cache_hit: r.requisitos_cache_hit ? 'sim' : 'não',
+        match_cache_hit: r.match_cache_hit ? 'sim' : 'não',
         resumo_tecnico: r.resumo_tecnico,
         error: r.error,
         ...resumo
@@ -239,10 +211,10 @@ export default function Match() {
         if (variant === 'success') atende += 1
         else if (variant === 'danger') {
           naoAtende += 1
-          gaps.push({ edital_id: r.edital_id, requisito: String(it?.requisito ?? '—'), status: statusLabel(it?.status), confidence: confN })
+          gaps.push({ edital_id: Number(r.edital_id ?? 0), requisito: String(it?.requisito ?? '—'), status: statusLabel(it?.status), confidence: confN })
         } else if (variant === 'warning') {
           duvida += 1
-          gaps.push({ edital_id: r.edital_id, requisito: String(it?.requisito ?? '—'), status: statusLabel(it?.status), confidence: confN })
+          gaps.push({ edital_id: Number(r.edital_id ?? 0), requisito: String(it?.requisito ?? '—'), status: statusLabel(it?.status), confidence: confN })
         }
       }
     }
@@ -270,69 +242,79 @@ export default function Match() {
 
   return (
     <div className="container">
-      <TopNav title="Match Produto x Edital" subtitle="Mesmo fluxo do Streamlit" />
+      <TopNav title="Match (1 clique)" subtitle="Envie os PDFs, rode OCR + match e exporte o resultado" />
 
       <div className="card">
         <div className="layout-2col">
           <div className="panel">
             <h3>Entrada</h3>
 
+            <div className="small" style={{ opacity: 0.9, marginBottom: 10 }}>
+              1) Envie o datasheet do produto (PDF) • 2) Envie 1+ editais (PDF) • 3) Clique em <strong>Executar match</strong>
+            </div>
+
             <div className="row">
               <div>
-                <label className="small">Produto salvo (do banco)</label>
-                <div className="inline">
-                  <select value={produtoId} onChange={(e) => applySelectedProduto(e.target.value, produtos)}>
-                    <option value="">(selecione)</option>
-                    {(produtos ?? []).map((p) => (
-                      <option key={p.id} value={String(p.id)}>
-                        {p.nome} (id={p.id})
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" className="btn btn--secondary" onClick={loadProdutos} disabled={loading}>
-                    Atualizar
-                  </button>
-                </div>
+                <label className="small">Datasheet (PDF)</label>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => setDatasheetFile(e.target.files?.[0] ?? null)}
+                />
+                {out?.datasheet?.name ? (
+                  <div className="small" style={{ marginTop: 6 }}>
+                    Processado: <strong>{out.datasheet.name}</strong> ({out.datasheet.cache_hit ? 'cache' : 'novo'})
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="small">Editais (1 ou mais PDFs)</label>
+                <input
+                  type="file"
+                  multiple
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => setEditalFiles(Array.from(e.target.files ?? []))}
+                />
                 <div className="small" style={{ marginTop: 6 }}>
-                  Dica: cadastre pelo <strong>Dataset</strong> ou extraia via <strong>Datasheet</strong>.
+                  Selecionados: <strong>{editalFiles.length}</strong>
                 </div>
               </div>
 
-              <div>
-                <label className="small">Produto (nome)</label>
-                <input value={produtoNome} onChange={(e) => setProdutoNome(e.target.value)} placeholder="ex: Switch 24p PoE" />
-              </div>
-
-              <div>
-                <label className="small">Atributos (JSON)</label>
-                <textarea rows={10} value={atributosJson} onChange={(e) => setAtributosJson(e.target.value)} />
-              </div>
-
-              <div>
-                <label className="small">IDs de editais (separados por vírgula)</label>
-                <input value={editalIds} onChange={(e) => setEditalIds(e.target.value)} placeholder="996290707, 123" />
-              </div>
-
-              <div>
-                <label className="small">Consulta textual (RAG)</label>
-                <input value={consulta} onChange={(e) => setConsulta(e.target.value)} placeholder="switch 24 portas poe" />
-              </div>
-
-              <div className="grid-2">
-                <div>
-                  <label className="small">Modelo (opcional)</label>
-                  <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="ex: gpt-4.1-mini / gemini..." />
-                </div>
-                <div>
-                  <label className="small">Email (opcional)</label>
-                  <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@empresa.com" />
+              <div className="inline" style={{ justifyContent: 'space-between' }}>
+                <button type="button" className="btn btn--secondary" onClick={() => setShowAdvanced((v) => !v)}>
+                  {showAdvanced ? 'Ocultar opções avançadas' : 'Opções avançadas'}
+                </button>
+                <div className="small" style={{ opacity: 0.85 }}>
+                  (opcional) modelo/consulta; email é usado no export
                 </div>
               </div>
 
-              <label className="small">
-                <input type="checkbox" checked={useRequisitos} onChange={(e) => setUseRequisitos(e.target.checked)} />{' '}
-                Usar requisitos (mais determinístico)
-              </label>
+              {showAdvanced ? (
+                <div className="card" style={{ padding: 12, background: 'rgba(255,255,255,0.03)' }}>
+                  <div className="grid-2">
+                    <div>
+                      <label className="small">Modelo do LLM (opcional)</label>
+                      <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="ex: llama3.1 / gpt-4.1-mini / gemini..." />
+                    </div>
+                    <div>
+                      <label className="small">Email padrão para envio (opcional)</label>
+                      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@empresa.com" />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <label className="small">Consulta textual (opcional)</label>
+                    <input
+                      value={consulta}
+                      onChange={(e) => setConsulta(e.target.value)}
+                      placeholder="Ex: priorize requisitos de rede e segurança"
+                    />
+                    <div className="small" style={{ opacity: 0.85, marginTop: 6 }}>
+                      Se vazio, o match roda totalmente automático (LLM faz a relação item a item).
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {error && (
                 <div className="small" style={{ color: '#fca5a5' }}>
@@ -353,7 +335,10 @@ export default function Match() {
                         onClick={() => {
                           const rows = buildAllRows()
                           const columns = [
-                            'edital_id',
+                            'edital',
+                            'edital_sha256',
+                            'requisitos_cache_hit',
+                            'match_cache_hit',
                             'requisito',
                             'status',
                             'confidence',
@@ -375,7 +360,10 @@ export default function Match() {
                         onClick={() => {
                           const rows = buildAllRows()
                           const columns = [
-                            'edital_id',
+                            'edital',
+                            'edital_sha256',
+                            'requisitos_cache_hit',
+                            'match_cache_hit',
                             'requisito',
                             'status',
                             'confidence',
@@ -397,7 +385,10 @@ export default function Match() {
                         onClick={async () => {
                           const rows = buildAllRows()
                           const columns = [
-                            'edital_id',
+                            'edital',
+                            'edital_sha256',
+                            'requisitos_cache_hit',
+                            'match_cache_hit',
                             'requisito',
                             'status',
                             'confidence',
@@ -550,8 +541,8 @@ export default function Match() {
                                 ? 'success'
                                 : 'neutral'
                           return (
-                            <tr key={r.edital_id}>
-                              <td>{r.edital_id}</td>
+                            <tr key={String(r.edital)}>
+                              <td>{String(r.edital)}</td>
                               <td>{r.total}</td>
                               <td>{r.atende}</td>
                               <td>{r.naoAtende}</td>
@@ -570,11 +561,14 @@ export default function Match() {
                 </div>
 
                 <div className="stack">
-                  {(out.results ?? []).map((r) => (
-                    <div key={r.edital_id} className="card-sub">
+                  {(out.results ?? []).map((r, idx) => (
+                    <div key={r.edital_sha256 ?? r.edital_name ?? String(r.edital_id ?? idx)} className="card-sub">
                       <div className="inline" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <div style={{ fontWeight: 700 }}>Edital #{r.edital_id}</div>
+                          <div style={{ fontWeight: 700 }}>Edital: {r.edital_name ?? `#${r.edital_id ?? idx + 1}`}</div>
+                          <div className="small">
+                            Cache OCR: {r.requisitos_cache_hit ? 'sim' : 'não'} · Cache match: {r.match_cache_hit ? 'sim' : 'não'}
+                          </div>
                           <div className="small">Resumo técnico e evidências</div>
                         </div>
                         <div className="inline" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -584,7 +578,10 @@ export default function Match() {
                             onClick={() => {
                               const rows = buildRowsForEdital(r)
                               const columns = [
-                                'edital_id',
+                                'edital',
+                                'edital_sha256',
+                                'requisitos_cache_hit',
+                                'match_cache_hit',
                                 'requisito',
                                 'status',
                                 'confidence',
@@ -595,7 +592,7 @@ export default function Match() {
                                 'suggested_fix'
                               ]
                               const csv = toCsv(rows, columns)
-                              downloadBlob(csvBlob(csv), `match_edital_${r.edital_id}.csv`)
+                              downloadBlob(csvBlob(csv), `match_edital_${(r.edital_name ?? r.edital_id ?? idx + 1)}.csv`)
                             }}
                           >
                             CSV
@@ -606,7 +603,10 @@ export default function Match() {
                             onClick={() => {
                               const rows = buildRowsForEdital(r)
                               const columns = [
-                                'edital_id',
+                                'edital',
+                                'edital_sha256',
+                                'requisitos_cache_hit',
+                                'match_cache_hit',
                                 'requisito',
                                 'status',
                                 'confidence',
@@ -616,8 +616,9 @@ export default function Match() {
                                 'missing_fields',
                                 'suggested_fix'
                               ]
-                              const blob = xlsxBlobFromRows([{ name: `edital_${r.edital_id}`, rows, columns }])
-                              downloadBlob(blob, `match_edital_${r.edital_id}.xlsx`)
+                              const sheetName = `edital_${(r.edital_name ?? r.edital_id ?? idx + 1)}`
+                              const blob = xlsxBlobFromRows([{ name: sheetName, rows, columns }])
+                              downloadBlob(blob, `match_edital_${(r.edital_name ?? r.edital_id ?? idx + 1)}.xlsx`)
                             }}
                           >
                             XLSX
@@ -628,7 +629,10 @@ export default function Match() {
                             onClick={async () => {
                               const rows = buildRowsForEdital(r)
                               const columns = [
-                                'edital_id',
+                                'edital',
+                                'edital_sha256',
+                                'requisitos_cache_hit',
+                                'match_cache_hit',
                                 'requisito',
                                 'status',
                                 'confidence',
@@ -638,13 +642,14 @@ export default function Match() {
                                 'missing_fields',
                                 'suggested_fix'
                               ]
-                              const blob = xlsxBlobFromRows([{ name: `edital_${r.edital_id}`, rows, columns }])
-                              await sendEmailWithAttachment(blob, `match_edital_${r.edital_id}.xlsx`)
+                              const sheetName = `edital_${(r.edital_name ?? r.edital_id ?? idx + 1)}`
+                              const blob = xlsxBlobFromRows([{ name: sheetName, rows, columns }])
+                              await sendEmailWithAttachment(blob, `match_edital_${(r.edital_name ?? r.edital_id ?? idx + 1)}.xlsx`)
                             }}
                           >
                             Email
                           </button>
-                          <JsonDownloadButton data={r} filename={`match_edital_${r.edital_id}.json`} label="JSON" />
+                          <JsonDownloadButton data={r} filename={`match_edital_${(r.edital_name ?? r.edital_id ?? idx + 1)}.json`} label="JSON" />
                         </div>
                       </div>
 
