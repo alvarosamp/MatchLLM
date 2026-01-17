@@ -222,7 +222,7 @@ def main() -> None:
             f"'{api_base_url}/editais/match/{edital_id}?consulta={consulta_q}' "
             "-H 'Content-Type: application/json' "
             + (f"-H '{args.auth_header}' " if args.auth_header else "")
-            f"-d '{json.dumps(produto_json, ensure_ascii=False)}'"
+            + f"-d '{json.dumps(produto_json, ensure_ascii=False)}'"
         )
 
     # Match com retry

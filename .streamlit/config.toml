@@ -1,0 +1,10 @@
+[server]
+# Upload com "AxiosError: 403" costuma ser falha de XSRF quando o app é acessado por IP/hostname diferente
+# (ex.: External URL) ou atrás de proxy. Para uso interno/dev, desabilitar evita o bloqueio.
+enableXsrfProtection = false
+
+# Em redes/proxies, CORS pode atrapalhar uploads e websocket; desabilitar simplifica o uso.
+enableCORS = false
+
+# Ajuste se você precisar de uploads maiores (em MB).
+# maxUploadSize = 200

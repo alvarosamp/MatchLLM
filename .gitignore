@@ -4,5 +4,16 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env.example
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Env
+.env
+.env.*
+
+# Local DB
+*.sqlite
+/data/*.sqlite

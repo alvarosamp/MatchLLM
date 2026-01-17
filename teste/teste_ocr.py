@@ -7,8 +7,8 @@ from core.ocr.extractor import PDFExtractor
 from core.ocr.normalizador import normalize_text
 
 # Caminhos
-edital_path = "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\editais\\EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf"
-produto_path = "C:\\Users\\vish8\\OneDrive\\Documentos\\MatchLLM\\data\\produtos\\Produto36334IdArquivo15589.pdf"
+edital_path = r"/Users/alvarosamp/Documents/Projetos/MatchLLM/data/editais/EDITAL_DO_PREGAO_ELETRONICO_N_242025__MATERIAL_DE_INFORMATICA_anx7532518935684159076.pdf"
+produto_path = r"/Users/alvarosamp/Documents/Projetos/MatchLLM/data/produtos/Produto36334IdArquivo15589.pdf"
 
 extractor = PDFExtractor()
 
